@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="assets/icons/MiHa.png">
+  <title>Новая приватная вкладка</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,600&display=swap">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header>
+    <nav id="menu-container">
+      <img src="assets/icons/menu.png" id="menu-icon" alt="Открыть меню">
+      <div id="dropdown-menu">
+        <a href="https://mail.google.com"><img src="assets/icons/gmail.png" alt="Gmail">Gmail</a>
+        <a href="https://www.google.com"><img src="assets/icons/google.png" alt="Google">Google</a>
+        <a href="https://www.youtube.com"><img src="assets/icons/youtube.png" alt="YouTube">YouTube</a>
+        <a href="https://www.google.com/maps"><img src="assets/icons/google-maps.png" alt="Google Maps">Google Maps</a>
+      </div>
+    </nav>
+  </header>
+
+  <div id="background"></div>
+
+  <main id="content">
+    <div id="title-container">
+      <span id="title-text">MiHa Browser</span>
+      <img id="title-icon" src="assets/icons/MiHa.png" alt="Иконка MiHa">
+    </div>
+
+    <div class="search-container">
+      <input type="text" id="search" placeholder="Введите запрос..." onkeydown="if(event.key==='Enter') searchQuery()" autofocus>
+      <button id="search-button" onclick="searchQuery()">
+        <img src="assets/icons/search.png" alt="Поиск">
+      </button>
+    </div>
+  </main>
+</body>
+</html>

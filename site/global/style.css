@@ -1,0 +1,260 @@
+/* Общие стили */
+* {
+  box-sizing: border-box;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Poppins', sans-serif;
+  background: #0d1117;
+  color: #fff;
+  overflow: hidden;
+}
+
+/* Стили для выпадающего списка выбора поисковой системы */
+.search-engine-dropdown {
+  position: relative;
+  width: 150px; /* Увеличил ширину контейнера */
+  cursor: pointer;
+}
+
+.search-engine-dropdown .selected-engine {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid transparent;
+  transition: border 0.3s ease;
+}
+
+.search-engine-dropdown .selected-engine:hover {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.search-engine-dropdown .selected-engine img {
+  width: 20px;
+  height: 20px;
+  margin-right: 5px;
+}
+
+.avoid-area {
+  position: absolute;
+  width: 100%;
+  height: 150px; /* Высота области, где не должно быть команд */
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  background: transparent;
+}
+
+.search-engine-dropdown .selected-engine .arrow {
+  margin-left: 5px;
+  font-size: 12px;
+}
+
+.dropdown-options {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  background: #1a1a1a;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  z-index: 10;
+  width: 100%;
+  display: none;
+}
+
+.dropdown-options .option {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  transition: background 0.3s ease;
+}
+
+.dropdown-options .option:hover {
+  background: #f0f0f0;
+}
+
+.dropdown-options .option img {
+  width: 20px;
+  height: 20px;
+  margin-right: 5px;
+}
+
+
+
+/* Фон с плавающими командами Python */
+#background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.python-code {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.1); /* Полупрозрачный текст */
+  font-family: monospace;
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Основной контейнер */
+#content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+/* Стили для заголовка браузера */
+#title-container {
+  font-size: 72px;
+  font-weight: 600;
+  margin-bottom: 30px;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#title-text {
+  font-family: 'Poppins', sans-serif;
+}
+
+#title-icon {
+  width: 60px;
+  height: auto;
+  margin-left: 10px;
+}
+
+/* Стили для меню */
+#menu-container {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 3;
+}
+
+#menu-icon {
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+#menu-icon:hover {
+  transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 0 8px rgba(255,255,255,0.6);
+}
+
+#dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: #1a1a1a;
+  border-radius: 5px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+
+#dropdown-menu a {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  color: #fff;
+  text-decoration: none;
+  font-size: 16px;
+  transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+#dropdown-menu a:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateX(8px) scale(1.03);
+  box-shadow: inset 4px 0 0 0 #fff;
+}
+
+#dropdown-menu a img {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+}
+
+/* Поисковая строка */
+.search-container {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50px;
+  padding: 10px 20px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+  max-width: 600px;
+  width: 100%;
+}
+
+.search-container:hover {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+}
+
+/* Селектор поисковой системы */
+#search-engine {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  padding: 8px;
+  margin-right: 10px;
+  color: #fff;
+  cursor: pointer;
+  outline: none;
+}
+
+#search-engine option {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+/* Поле ввода */
+#search {
+  flex-grow: 1;
+  padding: 12px;
+  font-size: 18px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+}
+
+/* Кнопка поиска */
+#search-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  margin-left: 10px;
+}
+
+#search-button img {
+  width: 28px;
+  height: 28px;
+  filter: invert(100%);
+  transition: transform 0.25s ease;
+}
+
+#search-button:hover img {
+  transform: scale(1.15);
+}

@@ -1,0 +1,14 @@
+{
+  "is_private": false,
+  "search_engine": "google",
+  "language": "ru",
+  "font_family": "Poppins",
+  "font_size": 10,
+  "homepage": "file:///C:/Users/Misza/Documents/Тест Пайтон/Браузер/site/global/index.html",
+  "download_mode": "ask",
+  "download_path": "",
+  "delete_on_close": false,
+  "smooth_animations": true,
+  "ui_theme": "Default",
+  "first_launch": false
+}
