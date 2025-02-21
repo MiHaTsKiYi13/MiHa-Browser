@@ -94,6 +94,8 @@
    ```bash
    git clone https://github.com/MiHaTsKiYi13/MiHa-Browser.git
    ```
+   Как скачать git? - 
+   - [Git](#git)
 
 4. **Проверка структуры файлов:**  
    В корневой папке должны находиться:
