@@ -137,12 +137,6 @@ python main.py
 
 ---
 
-## Лицензия
-
-Проект распространяется под лицензией MIT. Подробности см. в файле [LICENSE](LICENSE).
-
----
-
 ## Контакты и сообщество
 
 - **GitHub:** [MiHa-Browser](https://github.com/MiHaTsKiYi13/MiHa-Browser)
