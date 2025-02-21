@@ -6,11 +6,10 @@
 
 ---
 
-## Наши логотипы
-
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/53e4646d-b5f6-43dd-852e-382404f99adb" alt="Логотип MiHa Browser" width="200" style="margin: 0 20px;">
-  <img src="https://github.com/user-attachments/assets/de54f9d9-d513-46bb-a303-04ab2ec0db39" alt="Логотип приватного режима" width="200" style="margin: 0 20px;">
+  <h2>Наши логотипы</h2>
+  <img src="https://github.com/user-attachments/assets/157e5338-114e-4f35-b72d-90637e0d60a5" alt="Логотип 1" width="150" style="margin: 0 20px;">
+  <img src="https://github.com/user-attachments/assets/e1067a16-0b44-435c-a53d-ccfe4917a79d" alt="Логотип 2" width="150" style="margin: 0 20px;">
 </div>
 
 ---
