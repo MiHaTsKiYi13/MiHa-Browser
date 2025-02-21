@@ -146,8 +146,7 @@ python main.py
 ## Контакты и сообщество
 
 - **GitHub:** [MiHa-Browser](https://github.com/MiHaTsKiYi13/MiHa-Browser)
-- **Telegram/Discord:** Присоединяйтесь к нашему сообществу для обсуждения и поддержки.
-- **Email:** support@mihabrowser.com
+- **Telegram/Discord:** [MiHaTsKiYi](https://t.me/mihatskiyi)
 
 ---
 
