@@ -13,7 +13,7 @@
 ## Скриншоты
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/86a33be0-8bd6-4a63-873a-a76941547bbb" alt="Главное окно" width="600"/>
+  <img src="![изображение](https://github.com/user-attachments/assets/c9bb0ddd-71b7-4852-8cce-68592ce79d0b)" alt="Главное окно" width="600"/>
 </p>
 
 <p align="center">
