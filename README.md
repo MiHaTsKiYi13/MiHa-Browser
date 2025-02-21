@@ -1,6 +1,6 @@
 
-![Логотип MiHa Browser](https://github.com/user-attachments/assets/c8d56e53-d633-41e0-b969-574fdba840a7)
-![Логотип MiHa Browser](https://github.com/user-attachments/assets/0d660de6-fb50-4bd2-921a-e62e53fbeaf3)
+![ico](https://github.com/user-attachments/assets/53e4646d-b5f6-43dd-852e-382404f99adb)
+![icoprivate](https://github.com/user-attachments/assets/de54f9d9-d513-46bb-a303-04ab2ec0db39)
 
 # MiHa Browser
 
