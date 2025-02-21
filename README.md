@@ -78,9 +78,6 @@
   <img src="https://github.com/user-attachments/assets/4569f0ea-8648-4667-a25e-b3f1b82c058d" alt="Скриншот 4" width="200">
 </div>
 
-> **Демо:**  
-> Ознакомьтесь с коротким видео работы MiHa Browser на [YouTube](https://www.youtube.com/) или запустите интерактивное демо через GitHub Pages (ссылка в разделе [Контакты и сообщество](#контакты-и-сообщество)).
-
 ---
 
 ## Установка и запуск
