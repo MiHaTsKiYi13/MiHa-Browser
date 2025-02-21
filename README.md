@@ -174,4 +174,4 @@ python main.py
 - **Telegram/Discord:** [MiHaTsKiYi](https://t.me/mihatskiyi)
 
 Присоединяйтесь к нашему сообществу, чтобы следить за обновлениями, обсуждать идеи и делиться опытом!
-- **Telegram** [DE3NAKE](https://t.me/DE3NAKE)
+- **Telegram:** [DE3NAKE](https://t.me/DE3NAKE)
