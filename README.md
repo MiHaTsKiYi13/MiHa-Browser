@@ -1,4 +1,4 @@
-```markdown
+
 ![Логотип MiHa Browser](https://github.com/user-attachments/assets/c8d56e53-d633-41e0-b969-574fdba840a7)
 ![Логотип MiHa Browser](https://github.com/user-attachments/assets/0d660de6-fb50-4bd2-921a-e62e53fbeaf3)
 
