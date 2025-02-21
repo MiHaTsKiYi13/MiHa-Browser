@@ -13,6 +13,10 @@
 </div>
 
 ---
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) 
+[![Python Version](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/downloads/)
+[![GitHub stars](https://img.shields.io/github/stars/MiHaTsKiYi13/MiHa-Browser.svg?style=social)](https://github.com/MiHaTsKiYi13/MiHa-Browser/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/MiHaTsKiYi13/MiHa-Browser.svg?style=social)](https://github.com/MiHaTsKiYi13/MiHa-Browser/network)
 
 ## Содержание
 
@@ -45,36 +49,13 @@
 
 ## Скриншоты
 
-<table align="center">
-  <tr>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/7bd10a7a-202c-44a6-9aa8-b1b1aff65075" alt="Скриншот 1" width="200">
-    </td>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/78238618-cad3-47ac-9044-da254d39a3fa" alt="Скриншот 2" width="200">
-    </td>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/8d15212e-79fb-4e68-ad27-7cc9064fc1aa" alt="Скриншот 3" width="200">
-    </td>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/4569f0ea-8648-4667-a25e-b3f1b82c058d" alt="Скриншот 4" width="200">
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/ecd72be9-97ab-495e-aeee-1d901aa3f9bb" alt="Скриншот 5" width="200">
-    </td>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/f90bd0ef-8cba-462e-a457-cd0fff2007f3" alt="Скриншот 6" width="200">
-    </td>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/9c40ca2e-e400-42d1-8991-33acdef7bec0" alt="Скриншот 7" width="200">
-    </td>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/b90d0cc3-9ad0-4dfb-8281-98b23d0d6ecb" alt="Скриншот 8" width="200">
-    </td>
-  </tr>
-</table>
+<div align="center">
+  <h2>Превью интерфейса</h2>
+  <img src="https://github.com/user-attachments/assets/7bd10a7a-202c-44a6-9aa8-b1b1aff65075" alt="Скриншот 1" width="200">
+  <img src="https://github.com/user-attachments/assets/78238618-cad3-47ac-9044-da254d39a3fa" alt="Скриншот 2" width="200">
+  <img src="https://github.com/user-attachments/assets/8d15212e-79fb-4e68-ad27-7cc9064fc1aa" alt="Скриншот 3" width="200">
+  <img src="https://github.com/user-attachments/assets/4569f0ea-8648-4667-a25e-b3f1b82c058d" alt="Скриншот 4" width="200">
+</div>
 
 ---
 
