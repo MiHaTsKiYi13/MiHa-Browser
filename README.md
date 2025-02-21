@@ -147,8 +147,3 @@ python main.py
 
 - **GitHub:** [MiHa-Browser](https://github.com/MiHaTsKiYi13/MiHa-Browser)
 - **Telegram/Discord:** [MiHaTsKiYi](https://t.me/mihatskiyi)
-
-
-
-MiHa Browser – экспериментальный проект, который служит отличной базой для создания собственного браузера на Python. Если вам понравился проект, поставьте звезду на GitHub и делитесь им с друзьями!
-```
