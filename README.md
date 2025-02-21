@@ -1,11 +1,13 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) 
-[![Python Version](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/downloads/)
-[![GitHub stars](https://img.shields.io/github/stars/MiHaTsKiYi13/MiHa-Browser.svg?style=social)](https://github.com/MiHaTsKiYi13/MiHa-Browser/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/MiHaTsKiYi13/MiHa-Browser.svg?style=social)](https://github.com/MiHaTsKiYi13/MiHa-Browser/network)
+
 <div align="center">
   <h1>MiHa Browser</h1>
   <p>Простой, современный и экспериментальный браузер на базе <strong>PyQt6 WebEngine</strong></p>
 </div>
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) 
+[![Python Version](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/downloads/)
+[![GitHub stars](https://img.shields.io/github/stars/MiHaTsKiYi13/MiHa-Browser.svg?style=social)](https://github.com/MiHaTsKiYi13/MiHa-Browser/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/MiHaTsKiYi13/MiHa-Browser.svg?style=social)](https://github.com/MiHaTsKiYi13/MiHa-Browser/network)
+
 
 ---
 
