@@ -3,22 +3,22 @@ import sys, os, json, datetime, time, urllib.parse, shutil
 from pathlib import Path
 
 from PyQt6.QtCore import (
-    QUrl, QSize, Qt, QTimer, QPropertyAnimation, QEasingCurve,
-    QSequentialAnimationGroup, QParallelAnimationGroup, QPoint, QStandardPaths
+    QUrl, QSize, Qt, QTimer, QPropertyAnimation, QEasingCurve, QRect, QPoint,
+    QSequentialAnimationGroup, QParallelAnimationGroup, QRectF, QEvent, QStandardPaths
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QTabWidget, QLineEdit, QProgressBar, QDialog,
     QWidget, QLabel, QHBoxLayout, QVBoxLayout, QToolButton, QTreeWidget, QTreeWidgetItem,
-    QFileDialog, QMessageBox, QPushButton, QStatusBar, QGraphicsOpacityEffect, QMenu,
-    QSizePolicy, QFontDialog, QComboBox, QCheckBox, QInputDialog, QTextEdit
+    QFileDialog, QMessageBox, QPushButton, QStatusBar, QMenu, QSizePolicy, QFontDialog,
+    QComboBox, QCheckBox, QInputDialog, QDockWidget, QGraphicsOpacityEffect, QWidgetAction
 )
 from PyQt6.QtGui import (
-    QIcon, QAction, QDesktopServices, QFont, QPixmap, QShortcut, QKeySequence
+    QIcon, QAction, QDesktopServices, QFont, QShortcut, QKeySequence, QPixmap, QPainter, QPainterPath, QCursor, QGuiApplication, QMovie
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEnginePage, QWebEngineScript, QWebEngineDownloadRequest,
-    QWebEngineUrlRequestInterceptor, QWebEngineUrlRequestInfo, QWebEngineCookieStore
+    QWebEngineUrlRequestInterceptor, QWebEngineUrlRequestInfo, QWebEngineFullScreenRequest
 )
 
 # -------------------- Paths and Configuration --------------------
@@ -34,13 +34,18 @@ EXTENSIONS_FILE = os.path.join(CONFIGS_DIR, "extensions.json")
 BOOKMARKS_FILE = os.path.join(CONFIGS_DIR, "bookmarks.json")
 EXCEPTIONS_FILE = os.path.join(CONFIGS_DIR, "exceptions.json")
 
-USER_SCRIPT_FILE = os.path.join(BASE_DIR, "adblock.js")       # стандартное расширение "miblock"
-DARKREADER_FILE = os.path.join(BASE_DIR, "darkreader.js")     # скрипт "dark reader"
+EXTENSIONS_DIR = os.path.join(BASE_DIR, "extensions")
+os.makedirs(EXTENSIONS_DIR, exist_ok=True)
+
+USER_SCRIPT_FILE = os.path.join(EXTENSIONS_DIR, "adblock.js")
+DARKREADER_FILE = os.path.join(EXTENSIONS_DIR, "darkreader.js")
+
 
 ENGINE_URLS = {
     "google": "https://www.google.com/search?q=",
     "yandex": "https://yandex.ru/search/?text=",
-    "bing": "https://www.bing.com/search?q="
+    "bing": "https://www.bing.com/search?q=",
+    "duckduckgo": "https://duckduckgo.com/?q="
 }
 
 LANGS = ["ru", "en"]
@@ -50,7 +55,7 @@ TRANSLATIONS = {
         "new_window": "Новое окно",
         "private_on": "Новое приватное окно",
         "private_off": "Вернуться в обычный режим",
-        "history": "Журнал (история)",
+        "history": "История",
         "downloads": "Загрузки",
         "settings": "Настройки",
         "extensions": "Расширения",
@@ -78,11 +83,16 @@ TRANSLATIONS = {
         "extensions_remove": "Удалить",
         "extensions_toggle": "Вкл/Выкл",
         "extensions_need_restart": "Для применения новых скриптов перезапустите браузер.",
-        "default_extension_description": "адблок разработан MiHaTsKiYi специально для MiHa Browser",
+        "default_extension_description": "AdBlock разработан MiHaTsKiYi специально для MiHa Browser",
         "bookmarks": "Закладки",
         "add_bookmark": "Добавить закладку",
         "manage_bookmarks": "Управлять закладками",
-        "bookmarks_title": "Мои закладки"
+        "bookmarks_title": "Мои закладки",
+        "set_default_browser": "Сделать браузером по умолчанию",
+        "welcome_title": "Добро пожаловать!",
+        "welcome_text": "Спасибо, что выбрали MiHa Browser.\nНажмите «Настройки», чтобы настроить браузер по своему вкусу.",
+        "open_settings": "Открыть настройки",
+        "close": "Закрыть"
     },
     "en": {
         "new_tab": "New Tab",
@@ -117,15 +127,20 @@ TRANSLATIONS = {
         "extensions_remove": "Remove",
         "extensions_toggle": "Toggle On/Off",
         "extensions_need_restart": "Please restart the browser to apply new scripts.",
-        "default_extension_description": "MiBlock is an adblock developed by MiHaTsKiYi specifically for MiHa Browser",
+        "default_extension_description": "AdBlock is an adblock developed by MiHaTsKiYi specifically for MiHa Browser",
         "bookmarks": "Bookmarks",
         "add_bookmark": "Add Bookmark",
         "manage_bookmarks": "Manage Bookmarks",
-        "bookmarks_title": "My Bookmarks"
+        "bookmarks_title": "My Bookmarks",
+        "set_default_browser": "Set as default browser",
+        "welcome_title": "Welcome!",
+        "welcome_text": "Thank you for choosing MiHa Browser.\nClick 'Settings' to customize your browser.",
+        "open_settings": "Open Settings",
+        "close": "Close"
     }
 }
 
-# -------------------- Loading and Saving Configurations --------------------
+# -------------------- Utility Functions --------------------
 def load_settings():
     default_settings = {
         "is_private": False,
@@ -136,7 +151,10 @@ def load_settings():
         "homepage": "https://www.google.com",
         "download_mode": "ask",
         "download_path": "",
-        "delete_on_close": False
+        "delete_on_close": False,
+        "smooth_animations": True,
+        "ui_theme": "Default",
+        "first_launch": True
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -181,6 +199,17 @@ def load_downloads_from_file():
             pass
     return []
 
+def load_downloads_from_file():
+    if os.path.exists(DOWNLOADS_FILE):
+        try:
+            with open(DOWNLOADS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except:
+            pass
+    return []
+
 def save_downloads_to_file(downloads):
     with open(DOWNLOADS_FILE, "w", encoding="utf-8") as f:
         json.dump(downloads, f, ensure_ascii=False, indent=2)
@@ -195,6 +224,22 @@ def load_extensions_from_file():
         except:
             pass
     return []
+
+    def load_finished(self):
+        self.progress.hide()
+        webview = self.current_webview()
+        if webview:
+            url = webview.url().toString()
+            title = webview.page().title()
+            if not self.is_private:
+                history = load_history_from_file()
+                history.append({
+                    "url": url,
+                    "title": title,
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
+                save_history_to_file(history)
+
 
 def save_extensions_to_file(ext_list):
     with open(EXTENSIONS_FILE, "w", encoding="utf-8") as f:
@@ -215,7 +260,6 @@ def save_bookmarks(bookmarks):
     with open(BOOKMARKS_FILE, "w", encoding="utf-8") as f:
         json.dump(bookmarks, f, ensure_ascii=False, indent=2)
 
-# -------------------- Cache and Data Clearing --------------------
 def get_cache_size() -> int:
     total_bytes = 0
     for folder in ["cache", "storage"]:
@@ -227,21 +271,20 @@ def get_cache_size() -> int:
                         total_bytes += os.path.getsize(fp)
                     except:
                         pass
-    return total_bytes // (1024*1024)
+    return total_bytes // (1024 * 1024)
 
-def clear_browser_data(profile: QWebEngineProfile, cache_path: str, storage_path: str):
-    cookie_store: QWebEngineCookieStore = profile.cookieStore()
+def clear_browser_data(profile, cache_path: str, storage_path: str):
+    cookie_store = profile.cookieStore()
     cookie_store.deleteAllCookies()
     shutil.rmtree(cache_path, ignore_errors=True)
     shutil.rmtree(storage_path, ignore_errors=True)
     os.makedirs(cache_path, exist_ok=True)
     os.makedirs(storage_path, exist_ok=True)
 
-# -------------------- AdBlockInterceptor --------------------
+# -------------------- AdBlock Interceptor --------------------
 class AdBlockInterceptor(QWebEngineUrlRequestInterceptor):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Обновлённый список рекламных паттернов – включаем и блокировку по названию в YouTube
         self.ad_hosts = [
             "doubleclick.net", "googlesyndication.com", "adservice.google.com",
             "ads.youtube.com", "amazon-adsystem.com", "ads.exoclick.com",
@@ -264,10 +307,8 @@ class AdBlockInterceptor(QWebEngineUrlRequestInterceptor):
 
     def interceptRequest(self, info: QWebEngineUrlRequestInfo) -> None:
         url = info.requestUrl()
-        host = url.host().lower()
         full_url = url.toString().lower()
-        # Белый список для Google Maps
-        if "maps.google.com" in host or "googleapis.com/maps" in full_url:
+        if "maps.google.com" in full_url or "googleapis.com/maps" in full_url:
             return
         for pattern in self.ad_hosts:
             if pattern in full_url:
@@ -278,7 +319,7 @@ class AdBlockInterceptor(QWebEngineUrlRequestInterceptor):
                 info.block(True)
                 return
 
-# -------------------- CustomWebEnginePage --------------------
+# -------------------- Custom WebEnginePage --------------------
 class CustomWebEnginePage(QWebEnginePage):
     def __init__(self, profile, parent, main_window):
         super().__init__(profile, parent)
@@ -293,24 +334,24 @@ class CustomWebEnginePage(QWebEnginePage):
             return
         super().consoleMessage(level, message, line, sourceID)
 
-# -------------------- ManageDataDialog --------------------
+# -------------------- Dialogs --------------------
 class ManageDataDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle("Управление данными")
         self.setStyleSheet("""
-            QDialog { 
-                background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, 
+            QDialog {
+                background-color: qlineargradient(x1:0, y:0, x2:1, y:1,
                     stop:0 #2c2c2c, stop:1 #2f2f2f);
-                color: #e0e0e0; 
+                color: #e0e0e0;
                 border-radius: 10px;
             }
             QLabel { font-size: 14px; }
-            QPushButton { 
-                background-color: #3b3b3b; 
-                border: none; 
-                padding: 6px 12px; 
-                border-radius: 5px; 
+            QPushButton {
+                background-color: #3b3b3b;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 5px;
             }
             QPushButton:hover { background-color: #505050; }
         """)
@@ -335,28 +376,27 @@ class ManageDataDialog(QDialog):
         self.update_info()
         QMessageBox.information(self, "Очистка", "Данные успешно удалены!")
 
-# -------------------- ManageExceptionsDialog --------------------
 class ManageExceptionsDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle("Управление исключениями")
         self.setStyleSheet("""
-            QDialog { 
-                background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, 
+            QDialog {
+                background-color: qlineargradient(x1:0, y:0, x2:1, y:1,
                     stop:0 #2c2c2c, stop:1 #2f2f2f);
-                color: #e0e0e0; 
-                border-radius: 10px; 
+                color: #e0e0e0;
+                border-radius: 10px;
             }
-            QTreeWidget { 
-                background-color: #1e1e1e; 
-                border: 1px solid #555; 
-                border-radius: 5px; 
+            QTreeWidget {
+                background-color: #1e1e1e;
+                border: 1px solid #555;
+                border-radius: 5px;
             }
-            QPushButton { 
-                background-color: #3b3b3b; 
-                border: none; 
-                padding: 6px 12px; 
-                border-radius: 5px; 
+            QPushButton {
+                background-color: #3b3b3b;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 5px;
             }
             QPushButton:hover { background-color: #505050; }
         """)
@@ -418,7 +458,6 @@ class ManageExceptionsDialog(QDialog):
                 self.save_exceptions()
                 self.refresh_tree()
 
-# -------------------- DownloadManagerWindow --------------------
 class DownloadManagerWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -426,29 +465,29 @@ class DownloadManagerWindow(QDialog):
         self.setWindowIcon(QIcon(os.path.join(ICONS_DIR, "download.png")))
         self.resize(700, 500)
         self.setStyleSheet("""
-            QDialog { 
-                background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, 
+            QDialog {
+                background-color: qlineargradient(x1:0, y:0, x2:1, y:1,
                     stop:0 #2b2b2b, stop:1 #2f2f2f);
-                border: none; 
-                border-radius: 10px; 
+                border: none;
+                border-radius: 10px;
             }
-            QTreeWidget { 
-                background-color: rgba(30,30,30,0.95); 
-                color: #e0e0e0; 
-                border: none; 
-                border-radius: 5px; 
+            QTreeWidget {
+                background-color: rgba(30,30,30,0.95);
+                color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
             }
             QTreeWidget::item { padding: 6px; }
             QTreeWidget::item:hover { background-color: rgba(80,80,80,0.95); }
             QTreeWidget::item:selected { background-color: rgba(50,50,50,0.95); }
-            QPushButton { 
-                background-color: #808080; 
-                border: none; 
-                border-radius: 5px; 
-                padding: 6px 12px; 
-                color: #FFFFFF; 
-                font-size: 14px; 
-                font-weight: bold; 
+            QPushButton {
+                background-color: #808080;
+                border: none;
+                border-radius: 5px;
+                padding: 6px 12px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: bold;
             }
             QPushButton:hover { background-color: #707070; }
         """)
@@ -463,43 +502,49 @@ class DownloadManagerWindow(QDialog):
         self.finished_downloads = set()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_all_downloads)
-        self.timer.start(200)
+        self.timer.start(1000)
         self.speed_smoothing = 0.1
-        if not self.parent().is_private:
+        if self.parent() and not self.parent().is_private:
             self.load_persistent_downloads()
         self.setLayout(layout)
 
     def load_persistent_downloads(self):
         persistent_downloads = load_downloads_from_file()
         for d in persistent_downloads:
-            tree_item = QTreeWidgetItem([
-                d.get("file_name", ""), "100%", "0 B/s", d.get("status", "Завершено"), ""
-            ])
-            tree_item.setData(0, Qt.ItemDataRole.UserRole, d.get("file_path", ""))
-            self.tree.addTopLevelItem(tree_item)
+            file_path = d.get("file_path", "")
+            if os.path.exists(file_path):
+                tree_item = QTreeWidgetItem([
+                    d.get("file_name", ""), "100%", "0 B/s", d.get("status", "Завершено"), ""
+                ])
+                tree_item.setData(0, Qt.ItemDataRole.UserRole, file_path)
+                self.tree.addTopLevelItem(tree_item)
 
     def update_persistent_downloads(self):
-        if self.parent().is_private:
+        if self.parent() and self.parent().is_private:
             return
         downloads_list = []
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            downloads_list.append({
-                "file_name": item.text(0),
-                "file_path": item.data(0, Qt.ItemDataRole.UserRole),
-                "status": item.text(3)
-            })
+        items_to_check = [self.tree.topLevelItem(i) for i in range(self.tree.topLevelItemCount())]
+        for item in items_to_check:
+            file_path = item.data(0, Qt.ItemDataRole.UserRole)
+            if os.path.exists(file_path):
+                downloads_list.append({
+                    "file_name": item.text(0),
+                    "file_path": file_path,
+                    "status": item.text(3)
+                })
+            else:
+                self.remove_download_item(item)
         save_downloads_to_file(downloads_list)
 
     def format_speed(self, speed):
         if speed < 1024:
             return f"{speed:.0f} B/s"
-        elif speed < 1024*1024:
-            return f"{speed/1024:.1f} KB/s"
+        elif speed < 1024 * 1024:
+            return f"{speed / 1024:.1f} KB/s"
         else:
-            return f"{speed/(1024*1024):.1f} MB/s"
+            return f"{speed / (1024 * 1024):.1f} MB/s"
 
-    def add_download(self, download_item):
+    def add_download(self, download_item: QWebEngineDownloadRequest):
         tree_item = QTreeWidgetItem([
             download_item.downloadFileName(), "0%", "0 B/s", "Загрузка", ""
         ])
@@ -508,25 +553,29 @@ class DownloadManagerWindow(QDialog):
         self.tree.addTopLevelItem(tree_item)
         self.downloads[id(download_item)] = (download_item, tree_item)
         self.speed_info[id(download_item)] = (download_item.receivedBytes(), time.time(), 0.0)
-
-        control_widget = QWidget()
-        control_layout = QHBoxLayout(control_widget)
-        control_layout.setContentsMargins(0,0,0,0)
-        control_layout.setSpacing(5)
-        pause_btn = QPushButton("Пауза")
-        pause_btn.setMinimumWidth(80)
-        cancel_btn = QPushButton("Отмена")
-        cancel_btn.setMinimumWidth(80)
-        control_layout.addWidget(pause_btn)
-        control_layout.addWidget(cancel_btn)
-        self.tree.setItemWidget(tree_item, 4, control_widget)
-
-        pause_btn.clicked.connect(
-            lambda _, d=download_item, ti=tree_item, btn=pause_btn: self.toggle_pause(d, ti, btn)
-        )
-        cancel_btn.clicked.connect(
-            lambda _, d=download_item, ti=tree_item: self.cancel_download(d, ti)
-        )
+        # Создаем кастомный виджет для пункта меню загрузок
+        widget = QWidget()
+        hlayout = QHBoxLayout(widget)
+        hlayout.setContentsMargins(2, 2, 2, 2)
+        hlayout.setSpacing(5)
+        label = QLabel(download_item.downloadFileName())
+        label.setStyleSheet("color: #e0e0e0;")
+        def label_mouse_press(event):
+            self.download_manager.open_downloaded_file(tree_item, 0)
+        label.mousePressEvent = label_mouse_press
+        hlayout.addWidget(label)
+        btn_explorer = QPushButton()
+        btn_explorer.setIcon(QIcon(os.path.join(ICONS_DIR, "explorer.png")))
+        btn_explorer.setFixedSize(24, 24)
+        btn_explorer.setStyleSheet("border: none;")
+        def on_explorer_clicked():
+            file_path = tree_item.data(0, Qt.ItemDataRole.UserRole)
+            if file_path and os.path.exists(file_path):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(file_path)))
+        btn_explorer.clicked.connect(on_explorer_clicked)
+        hlayout.addWidget(btn_explorer)
+        hlayout.addStretch()
+        self.tree.setItemWidget(tree_item, 4, widget)
 
     def toggle_pause(self, download_item, tree_item, control_button):
         if download_item.isPaused():
@@ -543,14 +592,22 @@ class DownloadManagerWindow(QDialog):
         tree_item.setText(3, "Отменено")
         self.tree.setItemWidget(tree_item, 4, None)
         self.update_persistent_downloads()
+        if id(download_item) in self.downloads:
+            del self.downloads[id(download_item)]
 
     def update_all_downloads(self):
         current_time = time.time()
-        for key, (download_item, tree_item) in list(self.downloads.items()):
-            total = download_item.totalBytes()
-            received = download_item.receivedBytes()
+        for key in list(self.downloads.keys()):
+            download_item, tree_item = self.downloads[key]
+            try:
+                total = download_item.totalBytes()
+            except RuntimeError:
+                self.remove_download_item(tree_item)
+                del self.downloads[key]
+                continue
             if total > 0:
-                tree_item.setText(1, f"{int(received/total*100)}%")
+                received = download_item.receivedBytes()
+                tree_item.setText(1, f"{int(received / total * 100)}%")
             else:
                 tree_item.setText(1, "0%")
             if download_item.isPaused():
@@ -559,48 +616,38 @@ class DownloadManagerWindow(QDialog):
             else:
                 prev_received, prev_time, prev_smoothed_speed = self.speed_info.get(key, (0, current_time, 0.0))
                 delta_time = current_time - prev_time
+                received = download_item.receivedBytes()
                 if delta_time > 0:
                     instantaneous_speed = (received - prev_received) / delta_time
-                    smoothed_speed = (self.speed_smoothing * instantaneous_speed +
-                                      (1 - self.speed_smoothing) * prev_smoothed_speed)
+                    smoothed_speed = (0.1 * instantaneous_speed + 0.9 * prev_smoothed_speed)
                     tree_item.setText(2, self.format_speed(smoothed_speed))
                 else:
                     smoothed_speed = prev_smoothed_speed
                     tree_item.setText(2, "0 B/s")
-            self.speed_info[key] = (received, current_time, smoothed_speed)
+                self.speed_info[key] = (received, current_time, smoothed_speed)
             if download_item.isFinished():
+                tree_item.setText(1, "100%")
                 tree_item.setText(3, "Завершено")
                 self.tree.setItemWidget(tree_item, 4, None)
                 if key not in self.finished_downloads:
                     finished_info = {
                         "file_name": download_item.downloadFileName(),
-                        "file_path": os.path.join(
-                            download_item.downloadDirectory(),
-                            download_item.downloadFileName()
-                        ),
+                        "file_path": os.path.join(download_item.downloadDirectory(), download_item.downloadFileName()),
                         "timestamp": datetime.datetime.now().isoformat(),
                         "status": "Завершено"
                     }
-                    if not self.parent().is_private:
+                    if self.parent() and not self.parent().is_private:
                         downloads_list = load_downloads_from_file()
                         downloads_list.append(finished_info)
                         save_downloads_to_file(downloads_list)
                     self.finished_downloads.add(key)
-            elif download_item.isPaused():
-                tree_item.setText(3, "Пауза")
-            else:
-                tree_item.setText(3, "Загрузка")
 
     def open_downloaded_file(self, item, column):
         file_path = item.data(0, Qt.ItemDataRole.UserRole)
         if file_path and os.path.exists(file_path):
             QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
         else:
-            QMessageBox.warning(self, "Файл не найден", "Такого файла не существует!")
-            f = item.font(0)
-            f.setStrikeOut(True)
-            item.setFont(0, f)
-            QTimer.singleShot(1000, lambda: self.remove_download_item(item))
+            self.remove_download_item(item)
 
     def remove_download_item(self, item):
         idx = self.tree.indexOfTopLevelItem(item)
@@ -608,7 +655,6 @@ class DownloadManagerWindow(QDialog):
             self.tree.takeTopLevelItem(idx)
             self.update_persistent_downloads()
 
-# -------------------- HistoryWindow --------------------
 class HistoryWindow(QDialog):
     def __init__(self, history_items, load_callback, parent=None):
         super().__init__(parent)
@@ -617,7 +663,7 @@ class HistoryWindow(QDialog):
         self.load_callback = load_callback
         self.setStyleSheet("""
             QDialog {
-                background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, 
+                background-color: qlineargradient(x1:0, y:0, x2:1, y:1,
                     stop:0 #2c2c2c, stop:1 #2f2f2f);
                 border: none;
                 border-radius: 10px;
@@ -670,7 +716,7 @@ class HistoryWindow(QDialog):
                 date_item.addChild(child)
             date_item.setExpanded(True)
         self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
-        self.resize(300,600)
+        self.resize(300, 600)
 
     def on_item_double_clicked(self, item, column):
         url = item.data(0, Qt.ItemDataRole.UserRole)
@@ -689,19 +735,18 @@ class HistoryWindow(QDialog):
             self.tree.clear()
             QMessageBox.information(self, "История", "История успешно очищена.")
 
-# -------------------- BookmarksWindow --------------------
 class BookmarksWindow(QDialog):
     def __init__(self, bookmarks, load_callback, parent=None):
         super().__init__(parent)
         self.parent_win = parent
         self.load_callback = load_callback
-        self.bookmarks = bookmarks[:]  # копия списка
+        self.bookmarks = bookmarks[:]
         self.setWindowTitle(self.parent_win.tr_str("bookmarks_title"))
         self.setWindowIcon(QIcon(os.path.join(ICONS_DIR, "star.png")))
         self.resize(400, 500)
         self.setStyleSheet("""
             QDialog {
-                background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, 
+                background-color: qlineargradient(x1:0, y:0, x2:1, y:1,
                     stop:0 #2c2c2c, stop:1 #2f2f2f);
                 border: none;
                 border-radius: 10px;
@@ -803,7 +848,6 @@ class BookmarksWindow(QDialog):
         save_bookmarks(self.bookmarks)
         event.accept()
 
-# -------------------- ExtensionsDialog --------------------
 class ExtensionsDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
@@ -812,7 +856,7 @@ class ExtensionsDialog(QDialog):
         self.setWindowTitle(self.tr_str("extensions_title"))
         self.setStyleSheet("""
             QDialog {
-                background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1,
+                background-color: qlineargradient(x1:0, y:0, x2:1, y:1,
                     stop:0 #2e2e2e, stop:1 #3b3b3b);
                 border: none;
                 border-radius: 10px;
@@ -844,14 +888,17 @@ class ExtensionsDialog(QDialog):
         self.btn_add = QPushButton(self.tr_str("extensions_add"))
         self.btn_remove = QPushButton(self.tr_str("extensions_remove"))
         self.btn_toggle = QPushButton(self.tr_str("extensions_toggle"))
+        self.btn_edit = QPushButton("Редактировать описание")
         btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_remove)
         btn_layout.addWidget(self.btn_toggle)
+        btn_layout.addWidget(self.btn_edit)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
         self.btn_add.clicked.connect(self.add_extension)
         self.btn_remove.clicked.connect(self.remove_extension)
         self.btn_toggle.clicked.connect(self.toggle_selected_extension)
+        self.btn_edit.clicked.connect(self.edit_extension_description)
         self.extensions = load_extensions_from_file()
         if not any(ext.get("name", "").lower() == "miblock" for ext in self.extensions):
             if os.path.exists(USER_SCRIPT_FILE):
@@ -866,12 +913,44 @@ class ExtensionsDialog(QDialog):
                 "description": self.tr_str("default_extension_description")
             })
             save_extensions_to_file(self.extensions)
+        if not any(ext.get("name", "").lower() == "darkmode" for ext in self.extensions):
+            if os.path.exists(DARKREADER_FILE):
+                with open(DARKREADER_FILE, "r", encoding="utf-8") as f:
+                    code = f.read()
+            else:
+                code = "console.log('Dark Mode is running!');"
+            darkmode_desc = "Dark Mode расширение, которое меняет цветовую схему сайтов на тёмную, разработано MiHaTsKiYi специально для MiHa Browser"
+            self.extensions.append({
+                "name": "darkmode",
+                "code": code,
+                "enabled": True,
+                "description": darkmode_desc
+            })
+            save_extensions_to_file(self.extensions)
         self.refresh_tree()
         self.setLayout(layout)
 
     def tr_str(self, key: str) -> str:
         lang = self.parent_win.settings["language"]
         return TRANSLATIONS.get(lang, TRANSLATIONS["ru"]).get(key, key)
+
+    def edit_extension_description(self):
+        item = self.tree.currentItem()
+        if not item:
+            return
+        idx = self.tree.indexOfTopLevelItem(item)
+        if idx < 0:
+            return
+        ext = self.extensions[idx]
+        if ext.get("name", "").lower() == "miblock":
+            QMessageBox.information(self, "Info", "Нельзя редактировать описание стандартного расширения.")
+            return
+        new_desc, ok = QInputDialog.getText(self, "Редактировать описание", "Введите новое описание:", text=ext.get("description", ""))
+        if ok:
+            ext["description"] = new_desc.strip()
+            save_extensions_to_file(self.extensions)
+            self.refresh_tree()
+            QMessageBox.information(self, "Info", "Описание обновлено.")
 
     def refresh_tree(self):
         self.tree.clear()
@@ -917,6 +996,9 @@ class ExtensionsDialog(QDialog):
             if ext.get("name", "").lower() == "miblock":
                 QMessageBox.warning(self, "Ошибка", "Нельзя удалить стандартное расширение miblock.")
                 return
+            if ext.get("name", "").lower() == "darkmode":
+                QMessageBox.warning(self, "Ошибка", "Нельзя удалить стандартное расширение Dark Mode.")
+                return
             reply = QMessageBox.question(
                 self, "Удалить скрипт?",
                 "Вы уверены, что хотите удалить выбранное расширение?",
@@ -944,13 +1026,14 @@ class ExtensionsDialog(QDialog):
         QMessageBox.information(self, "Info", self.tr_str("extensions_need_restart"))
         self.parent_win.update_extensions()
 
-# -------------------- SettingsDialog --------------------
 class SettingsDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent_win = parent
         self.setModal(True)
         self.setWindowTitle(self.tr_str("settings_title"))
+
+        # Плавная анимация проявления
         self.setWindowOpacity(0.0)
         self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
         self.fade_animation.setDuration(500)
@@ -958,33 +1041,70 @@ class SettingsDialog(QDialog):
         self.fade_animation.setEndValue(1.0)
         self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self.fade_animation.start()
+
+        # Общий стиль
         self.setStyleSheet("""
             QDialog {
-                background-color: qlineargradient(
-                    spread:pad, x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #3c3c3c, stop:1 #2a2a2a
-                );
-                border: 2px solid #555;
+                background-color: qlineargradient(x1:0, y:0, x2:1, y:1,
+                    stop:0 #2c2c2b, stop:1 #2f2f2f);
+                border: none;
                 border-radius: 10px;
             }
+
             QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox {
                 font-size: 14px;
                 color: #e0e0e0;
             }
+
             QComboBox, QLineEdit {
-                background-color: #4a4a4a;
-                border: 1px solid #777;
+                background-color: #2e2e2e;
+                border: 1px solid #555;
                 padding: 4px;
                 border-radius: 5px;
+                padding-right: 30px; /* место под стрелку */
             }
+
+            /* Область кнопки раскрытия */
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: center right;
+                width: 28px;
+                border-left: 1px solid #555;
+                border-top-right-radius: 5px;
+                border-bottom-right-radius: 5px;
+                background-color: #3b3b3b;
+            }
+
+            /* Стрелка без круга вокруг */
+            QComboBox::down-arrow {
+                image: url("icons/down.png"); /* путь к файлу down.png */
+                width: 16px;
+                height: 16px;
+                margin: 6px;       /* чтобы иконка оказалась по центру */
+                background: none;  /* убираем заливку */
+                border-radius: 0;  /* убираем скругление */
+            }
+
+            /* Список */
+            QComboBox QAbstractItemView {
+                background-color: #3b3b3b;
+                border: 1px solid #555;
+                selection-background-color: #505050;
+                selection-color: #ffffff;
+            }
+
             QPushButton {
-                background-color: #5a5a5a;
-                border: 1px solid #666;
+                background-color: #3b3b3b;
+                border: none;
                 padding: 6px 12px;
                 border-radius: 5px;
             }
-            QPushButton:hover { background-color: #6a6a6a; }
+
+            QPushButton:hover {
+                background-color: #505050;
+            }
         """)
+
         self.resize(480, 420)
         self.init_ui()
 
@@ -994,16 +1114,23 @@ class SettingsDialog(QDialog):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
+
+        # ----- Поисковый движок -----
         hl_engine = QHBoxLayout()
         lbl_engine = QLabel(self.tr_str("search_engine") + ":")
         self.cmb_engine = QComboBox()
-        self.cmb_engine.addItems(["google", "yandex", "bing"])
+        if self.parent_win.is_private:
+            self.cmb_engine.addItems(["duckduckgo"])
+        else:
+            self.cmb_engine.addItems(["google", "yandex", "bing", "duckduckgo"])
         self.cmb_engine.setCurrentText(self.parent_win.settings["search_engine"])
         if self.parent_win.is_private:
             self.cmb_engine.setEnabled(False)
         hl_engine.addWidget(lbl_engine)
         hl_engine.addWidget(self.cmb_engine)
         layout.addLayout(hl_engine)
+
+        # ----- Домашняя страница -----
         hl_home = QHBoxLayout()
         lbl_home = QLabel(self.tr_str("homepage") + ":")
         self.le_home = QLineEdit()
@@ -1013,16 +1140,25 @@ class SettingsDialog(QDialog):
         hl_home.addWidget(lbl_home)
         hl_home.addWidget(self.le_home)
         layout.addLayout(hl_home)
+
+        # ----- Режим загрузки -----
         hl_dl = QHBoxLayout()
         lbl_dl = QLabel(self.tr_str("download_mode") + ":")
         self.cmb_dl = QComboBox()
-        self.cmb_dl.addItems([self.tr_str("ask"), self.tr_str("default"), self.tr_str("custom")])
-        self.cmb_dl.setCurrentIndex({"ask":0, "default":1, "custom":2}.get(
-            self.parent_win.settings.get("download_mode", "ask"), 0
-        ))
+        self.cmb_dl.addItems([
+            self.tr_str("ask"),
+            self.tr_str("default"),
+            self.tr_str("custom")
+        ])
+        current_dl_mode = self.parent_win.settings.get("download_mode", "ask")
+        self.cmb_dl.setCurrentIndex({
+            "ask": 0, "default": 1, "custom": 2
+        }.get(current_dl_mode, 0))
         hl_dl.addWidget(lbl_dl)
         hl_dl.addWidget(self.cmb_dl)
         layout.addLayout(hl_dl)
+
+        # ----- Путь загрузки -----
         hl_path = QHBoxLayout()
         lbl_path = QLabel(self.tr_str("custom_download_path") + ":")
         self.le_path = QLineEdit()
@@ -1033,8 +1169,11 @@ class SettingsDialog(QDialog):
         hl_path.addWidget(self.le_path)
         hl_path.addWidget(self.btn_browse)
         layout.addLayout(hl_path)
+
         self.cmb_dl.currentIndexChanged.connect(self.update_dl_mode)
         self.update_dl_mode(self.cmb_dl.currentIndex())
+
+        # ----- Язык -----
         hl_lang = QHBoxLayout()
         lbl_lang = QLabel(self.tr_str("language") + ":")
         self.cmb_lang = QComboBox()
@@ -1043,6 +1182,8 @@ class SettingsDialog(QDialog):
         hl_lang.addWidget(lbl_lang)
         hl_lang.addWidget(self.cmb_lang)
         layout.addLayout(hl_lang)
+
+        # ----- Шрифт -----
         hl_font = QHBoxLayout()
         lbl_font = QLabel(self.tr_str("font") + ":")
         self.btn_font = QPushButton(self.parent_win.settings["font_family"])
@@ -1050,13 +1191,15 @@ class SettingsDialog(QDialog):
         hl_font.addWidget(lbl_font)
         hl_font.addWidget(self.btn_font)
         layout.addLayout(hl_font)
-        layout.addSpacing(10)
+
+        # ----- Данные и куки -----
         lbl_cookies = QLabel(f"<b>{self.tr_str('cookies_data')}</b>")
         layout.addWidget(lbl_cookies)
         usage_mb = get_cache_size()
         lbl_usage = QLabel(self.tr_str("cookies_data_info").format(usage_mb))
         lbl_usage.setStyleSheet("color: #cccccc; font-size: 13px;")
         layout.addWidget(lbl_usage)
+
         cookies_btn_layout = QHBoxLayout()
         btn_delete = QPushButton(self.tr_str("delete_data"))
         btn_manage = QPushButton(self.tr_str("manage_data"))
@@ -1068,32 +1211,77 @@ class SettingsDialog(QDialog):
         cookies_btn_layout.addWidget(btn_manage)
         cookies_btn_layout.addWidget(btn_exceptions)
         layout.addLayout(cookies_btn_layout)
+
         self.chk_delete_on_close = QCheckBox(self.tr_str("delete_on_close"))
         self.chk_delete_on_close.setChecked(self.parent_win.settings.get("delete_on_close", False))
         layout.addWidget(self.chk_delete_on_close)
+
         lbl_info = QLabel(self.tr_str("restart_info"))
         lbl_info.setStyleSheet("color: #999999; font-size: 12px;")
         layout.addWidget(lbl_info)
-        btn_layout = QHBoxLayout()
+
+        bottom_layout = QHBoxLayout()
+
+        # Лейбл с текстом лицензии
+        self.license_label = QLabel("Made with Python")
+        self.license_label.setStyleSheet("font-size: 10px; color: #aaaaaa;")
+
+        class ClickableLabel(QLabel):
+            def __init__(self, parent_win, url, tab_title):
+                # Передаём родительское окно, чтобы потом использовать его метод add_new_tab
+                super().__init__(parent_win)
+                self.parent_win = parent_win
+                self.url = url
+                self.tab_title = tab_title
+                # Меняем курсор на указатель (руку) при наведении
+                self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            def mousePressEvent(self, event):
+                # Открываем новую вкладку внутри нашего браузера, вызывая метод главного окна
+                self.parent_win.add_new_tab(QUrl(self.url), self.tab_title)
+                super().mousePressEvent(event)
+
+        # Пример использования в вашем коде:
+        self.gif_label = ClickableLabel(self.parent_win,
+                                        "https://github.com/MiHaTsKiYi13/MiHa-Browser",
+                                        "GitHub Repo")
+        pixmap = QPixmap("icons/python.png")
+        self.gif_label.setPixmap(pixmap)
+        self.gif_label.setScaledContents(True)
+        self.gif_label.setFixedSize(16, 16)
+
+        # Контейнер для лицензии и гифки
+        license_layout = QHBoxLayout()
+        license_layout.addWidget(self.gif_label)
+        license_layout.addWidget(self.license_label)
+        license_layout.addStretch()  # Отправляет всё влево
+
+        # Добавляем в основной layout
+        layout.addLayout(license_layout)
+
+        # Кнопки: OK / Cancel / Exit
         btn_ok = QPushButton("OK")
         btn_cancel = QPushButton("Cancel")
         btn_exit = QPushButton(self.tr_str("exit"))
+
         btn_ok.clicked.connect(self.on_ok)
         btn_cancel.clicked.connect(self.on_cancel)
         btn_exit.clicked.connect(self.parent_win.close)
-        btn_layout.addStretch()
-        btn_layout.addWidget(btn_ok)
-        btn_layout.addWidget(btn_cancel)
-        btn_layout.addWidget(btn_exit)
-        layout.addLayout(btn_layout)
+
+        bottom_layout.addWidget(btn_ok)
+        bottom_layout.addWidget(btn_cancel)
+        bottom_layout.addWidget(btn_exit)
+
+        layout.addLayout(bottom_layout)
         self.setLayout(layout)
 
     def choose_download_path(self):
-        path = QFileDialog.getExistingDirectory(self, "Выберите папку для загрузок")
+        path = QFileDialog.getExistingDirectory(self, "Choose download folder")
         if path:
             self.le_path.setText(path)
 
     def update_dl_mode(self, idx):
+        # idx == 2 -> "custom"
         if idx == 2:
             self.le_path.setEnabled(True)
             self.btn_browse.setEnabled(True)
@@ -1105,19 +1293,20 @@ class SettingsDialog(QDialog):
         current_family = self.parent_win.settings["font_family"]
         current_size = self.parent_win.settings["font_size"]
         initial_font = QFont(current_family, current_size)
-        font, ok = QFontDialog.getFont(initial_font, self, "Выберите шрифт")
+        font, ok = QFontDialog.getFont(initial_font, self, "Choose font")
         if ok:
             self.btn_font.setText(font.family())
 
     def on_delete_data(self):
         reply = QMessageBox.question(
-            self, "Очистить данные",
-            "Вы действительно хотите удалить все куки и данные сайтов?",
+            self,
+            "Clear Data",
+            "Do you really want to delete all cookies and site data?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.parent_win.clear_browser_data_manually()
-            QMessageBox.information(self, "Очистка", "Данные успешно удалены!")
+            QMessageBox.information(self, "Clear", "Data successfully cleared!")
 
     def on_ok(self):
         new_engine = self.cmb_engine.currentText()
@@ -1128,6 +1317,7 @@ class SettingsDialog(QDialog):
         dl_map = {0: "ask", 1: "default", 2: "custom"}
         new_dl_mode = dl_map.get(idx_dl, "ask")
         new_dl_path = self.le_path.text()
+
         self.parent_win.settings["search_engine"] = new_engine
         self.parent_win.settings["homepage"] = new_home
         self.parent_win.settings["language"] = new_lang
@@ -1135,6 +1325,7 @@ class SettingsDialog(QDialog):
         self.parent_win.settings["download_mode"] = new_dl_mode
         self.parent_win.settings["download_path"] = new_dl_path
         self.parent_win.settings["delete_on_close"] = self.chk_delete_on_close.isChecked()
+
         self.parent_win.apply_settings()
         save_settings(self.parent_win.settings)
         self.close()
@@ -1142,6 +1333,171 @@ class SettingsDialog(QDialog):
     def on_cancel(self):
         self.close()
 
+class FirstLaunchDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_win = parent
+        # Если язык не задан, устанавливаем дефолтный английский
+        if "language" not in self.parent_win.settings:
+            self.parent_win.settings["language"] = "en"
+
+        # Окно без рамки для стильного оформления
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2e2e2e;
+                border: 2px solid #555;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #e0e0e0;
+                font-size: 18px;
+                margin: 10px;
+            }
+            QPushButton {
+                background-color: #5a5a5a;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                color: #ffffff;
+                margin: 5px;
+            }
+            QPushButton:hover {
+                background-color: #707070;
+            }
+        """)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        title = QLabel("Make browser default?")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        btn_layout = QHBoxLayout()
+        btn_yes = QPushButton("Yes")
+        btn_skip = QPushButton("Skip")
+        btn_layout.addWidget(btn_yes)
+        btn_layout.addWidget(btn_skip)
+        layout.addLayout(btn_layout)
+
+        btn_yes.clicked.connect(self.set_default_browser)
+        btn_skip.clicked.connect(self.open_language_dialog)
+        self.setLayout(layout)
+
+    def set_default_browser(self):
+        # Открываем настройки стандартных приложений (только для Windows)
+        try:
+            os.startfile("ms-settings:defaultapps")
+        except Exception as e:
+            print("Failed to open default apps settings:", e)
+        # Закрываем текущее окно и переходим к выбору языка
+        self.close()
+        lang_dialog = LanguageSelectionDialog(self.parent_win)
+        lang_dialog.exec()
+
+    def open_language_dialog(self):
+        # Закрываем текущее окно и открываем диалог выбора языка
+        self.close()
+        lang_dialog = LanguageSelectionDialog(self.parent_win)
+        lang_dialog.exec()
+
+    def showEvent(self, event):
+        dialog_width = 400
+        dialog_height = 200
+        # Если родительское окно видно, центрируем относительно него, иначе по экрану
+        if self.parent_win and self.parent_win.isVisible():
+            parent_geom = self.parent_win.geometry()
+        else:
+            parent_geom = QGuiApplication.primaryScreen().availableGeometry()
+        x = parent_geom.x() + (parent_geom.width() - dialog_width) // 2
+        y = parent_geom.y() + (parent_geom.height() - dialog_height) // 2
+        self.setGeometry(x, y, dialog_width, dialog_height)
+        # Плавное появление (fade‑in)
+        self.setWindowOpacity(0)
+        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_animation.setDuration(500)
+        self.fade_animation.setStartValue(0)
+        self.fade_animation.setEndValue(1)
+        self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.fade_animation.start()
+        super().showEvent(event)
+
+
+class LanguageSelectionDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_win = parent
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2e2e2e;
+                border: 2px solid #555;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #e0e0e0;
+                font-size: 18px;
+                margin: 10px;
+            }
+            QPushButton {
+                background-color: #5a5a5a;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                color: #ffffff;
+                margin: 5px;
+            }
+            QPushButton:hover {
+                background-color: #707070;
+            }
+        """)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        title = QLabel("Select Language")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        btn_layout = QHBoxLayout()
+        btn_russian = QPushButton("Русский")
+        btn_english = QPushButton("English")
+        btn_layout.addWidget(btn_russian)
+        btn_layout.addWidget(btn_english)
+        layout.addLayout(btn_layout)
+
+        btn_russian.clicked.connect(lambda: self.set_language("ru"))
+        btn_english.clicked.connect(lambda: self.set_language("en"))
+        self.setLayout(layout)
+
+    def set_language(self, lang):
+        # Обновляем настройки родительского окна
+        self.parent_win.settings["language"] = lang
+        if hasattr(self.parent_win, "update_language"):
+            self.parent_win.update_language(lang)
+        self.close()
+
+    def showEvent(self, event):
+        dialog_width = 400
+        dialog_height = 200
+        # Центрируем окно относительно родительского окна, либо экрана
+        if self.parent_win and self.parent_win.isVisible():
+            parent_geom = self.parent_win.geometry()
+        else:
+            parent_geom = QGuiApplication.primaryScreen().availableGeometry()
+        x = parent_geom.x() + (parent_geom.width() - dialog_width) // 2
+        y = parent_geom.y() + (parent_geom.height() - dialog_height) // 2
+        self.setGeometry(x, y, dialog_width, dialog_height)
+        # Плавное появление (fade‑in)
+        self.setWindowOpacity(0)
+        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_animation.setDuration(500)
+        self.fade_animation.setStartValue(0)
+        self.fade_animation.setEndValue(1)
+        self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.fade_animation.start()
+        super().showEvent(event)
 # -------------------- MainWindow --------------------
 class MainWindow(QMainWindow):
     def __init__(self, settings=None):
@@ -1151,6 +1507,8 @@ class MainWindow(QMainWindow):
         self.settings = settings
         self.is_private = self.settings["is_private"]
         self.dev_tools_window = None
+        self.chatgpt_dock = None
+        self.download_animations = []
         if self.is_private and os.path.exists(os.path.join(ICONS_DIR, "icoprivate.png")):
             self.setWindowIcon(QIcon(os.path.join(ICONS_DIR, "icoprivate.png")))
         else:
@@ -1169,11 +1527,71 @@ class MainWindow(QMainWindow):
         self.initUI()
         self.init_shortcuts()
         self.update_extensions()
+        if self.settings.get("first_launch", True):
+            self.show_first_launch_dialog()
+            self.settings["first_launch"] = False
+            save_settings(self.settings)
 
-    def closeEvent(self, event):
-        if self.settings.get("delete_on_close", False):
-            self.clear_browser_data_manually()
-        event.accept()
+    def save_current_history(self):
+        self.progress.hide()
+        webview = self.current_webview()
+        if webview:
+            url = webview.url().toString()
+            title = webview.page().title()
+            if not self.is_private:
+                history = load_history_from_file()
+                history.append({
+                    "url": url,
+                    "title": title,
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
+                save_history_to_file(history)
+
+    def load_custom_extensions(self):
+        for script in self.custom_extension_scripts:
+            self.profile.scripts().remove(script)
+        self.custom_extension_scripts.clear()
+        ext_list = load_extensions_from_file()
+        if not any(ext.get("name", "").lower() == "miblock" for ext in ext_list):
+            if os.path.exists(USER_SCRIPT_FILE):
+                with open(USER_SCRIPT_FILE, "r", encoding="utf-8") as f:
+                    code = f.read()
+            else:
+                code = "console.log('MiBlock is running!');"
+            ext_list.append({
+                "name": "miblock",
+                "code": code,
+                "enabled": True,
+                "description": TRANSLATIONS[self.settings["language"]].get("default_extension_description", "")
+            })
+            save_extensions_to_file(ext_list)
+        if not any(ext.get("name", "").lower() == "darkmode" for ext in ext_list):
+            if os.path.exists(DARKREADER_FILE):
+                with open(DARKREADER_FILE, "r", encoding="utf-8") as f:
+                    code = f.read()
+            else:
+                code = "console.log('Dark Mode is running!');"
+            darkmode_desc = "Dark Mode расширение, которое меняет цветовую схему сайтов на тёмную, разработано MiHaTsKiYi специально для MiHa Browser"
+            ext_list.append({
+                "name": "darkmode",
+                "code": code,
+                "enabled": True,
+                "description": darkmode_desc
+            })
+            save_extensions_to_file(ext_list)
+        for ext in ext_list:
+            if ext.get("enabled", True):
+                script = QWebEngineScript()
+                script.setName(ext.get("name", "UserExtension"))
+                script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                script.setRunsOnSubFrames(True)
+                script.setSourceCode(ext.get("code", ""))
+                self.profile.scripts().insert(script)
+                self.custom_extension_scripts.append(script)
+        save_extensions_to_file(ext_list)
+
+    def set_default_browser(self):
+        QDesktopServices.openUrl(QUrl("ms-settings:defaultapps"))
 
     def tr_str(self, key: str) -> str:
         lang = self.settings["language"]
@@ -1183,6 +1601,13 @@ class MainWindow(QMainWindow):
         font_family = self.settings["font_family"]
         font_size = self.settings["font_size"]
         self.setFont(QFont(font_family, font_size))
+        ui_theme = self.settings.get("ui_theme", "Default")
+        if ui_theme == "Dark":
+            self.setStyleSheet("QToolBar { background-color: #2e2e2e; }")
+        elif ui_theme == "Light":
+            self.setStyleSheet("QToolBar { background-color: #f0f0f0; }")
+        else:
+            self.setStyleSheet("")
 
     def initUI(self):
         os.makedirs(self.cache_path, exist_ok=True)
@@ -1204,7 +1629,6 @@ class MainWindow(QMainWindow):
             script.setName("LocalUserScript")
             script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
             script.setRunsOnSubFrames(True)
-            script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
             script.setSourceCode(code)
             self.profile.scripts().insert(script)
         if os.path.exists(DARKREADER_FILE):
@@ -1214,18 +1638,20 @@ class MainWindow(QMainWindow):
             dark_script.setName("DarkReaderScript")
             dark_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
             dark_script.setRunsOnSubFrames(True)
-            dark_script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
             dark_script.setSourceCode(code)
             self.profile.scripts().insert(dark_script)
+        self.inject_allowfullscreen_script()
+
+
+
         navtb = QToolBar("Navigation")
-        navtb.setIconSize(QSize(16,16))
+        navtb.setIconSize(QSize(18, 18))
         navtb.setStyleSheet("""
             QToolBar {
-                background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #1e1e1e, stop:1 #252525);
-                border-bottom: 1px solid #444; 
-                spacing: 10px; 
-                padding: 5px; 
+                background-color: #333333;
+                border-bottom: 1px solid #444;
+                spacing: 8px;
+                padding: 6px;
             }
             QToolButton {
                 background-color: transparent;
@@ -1233,17 +1659,19 @@ class MainWindow(QMainWindow):
                 color: #e0e0e0;
             }
             QToolButton:hover {
-                background-color: #323232;
+                background-color: #555555;
+                border-radius: 4px;
             }
             QLineEdit {
                 background-color: #2b2b2b;
-                border: 1px solid #555;
+                border: 1px solid #666;
                 color: #e0e0e0;
                 padding: 4px;
                 border-radius: 4px;
             }
         """)
         self.addToolBar(navtb)
+
         back_btn = QAction(QIcon(os.path.join(ICONS_DIR, "leftico.png")), "Назад", self)
         back_btn.triggered.connect(self.navigate_back)
         navtb.addAction(back_btn)
@@ -1255,7 +1683,7 @@ class MainWindow(QMainWindow):
         navtb.addAction(reload_btn)
         search_widget = QWidget()
         search_layout = QHBoxLayout(search_widget)
-        search_layout.setContentsMargins(0,0,0,0)
+        search_layout.setContentsMargins(0, 0, 0, 0)
         search_layout.setSpacing(5)
         self.urlbar = QLineEdit()
         self.urlbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -1263,29 +1691,40 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.urlbar)
         navtb.addWidget(search_widget)
         self.bookmark_button = QToolButton()
-        self.bookmark_button.setIcon(QIcon(os.path.join(ICONS_DIR, "star.png")))
         self.bookmark_button.clicked.connect(self.toggle_bookmark)
         navtb.addWidget(self.bookmark_button)
-        self.history_btn = QToolButton()
-        self.history_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "history.png")))
-        self.history_btn.clicked.connect(self.show_history)
-        if not self.is_private:
-            navtb.addWidget(self.history_btn)
-        download_btn = QToolButton()
-        download_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "download.png")))
-        download_btn.clicked.connect(self.show_download_manager)
-        navtb.addWidget(download_btn)
-        self.download_button = download_btn
+        self.update_bookmark_icon()
+        self.extensions_btn = QToolButton()
+        self.extensions_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "extensions.png")))
+        self.extensions_btn.clicked.connect(self.show_extensions_dialog)
+        navtb.addWidget(self.extensions_btn)
+        self.download_manager = DownloadManagerWindow(self)
+        self.download_btn = QToolButton()
+        self.download_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "download.png")))
+        self.download_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.download_btn.setStyleSheet("""
+            QToolButton::menu-indicator {
+                image: none;
+                width: 0;
+            }
+        """)
+        self.download_btn.clicked.connect(self.show_downloads_menu)
+        navtb.addWidget(self.download_btn)
+        self.chatgpt_btn = QToolButton()
+        self.chatgpt_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "chatgpt.png")))
+        self.chatgpt_btn.setToolTip("Open ChatGPT Sidebar")
+        self.chatgpt_btn.clicked.connect(self.open_chatgpt_sidebar)
+        navtb.addWidget(self.chatgpt_btn)
         menu_button = QToolButton()
         menu_button.setIcon(QIcon(os.path.join(ICONS_DIR, "settings.png")))
         menu_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
-        menu = QMenu()
-        menu.setStyleSheet("""
+        main_menu = QMenu()
+        main_menu.setStyleSheet("""
             QMenu {
                 background-color: #2e2e2e;
                 color: #e0e0e0;
                 border: 1px solid #444;
-                border-radius: 10px;
+                border-radius: 8px;
                 padding: 5px;
             }
             QMenu::item {
@@ -1293,46 +1732,46 @@ class MainWindow(QMainWindow):
             }
             QMenu::item:selected {
                 background-color: #505050;
-                border-radius: 5px;
+                border-radius: 4px;
             }
         """)
         new_tab_action = QAction(self.tr_str("new_tab"), self)
         new_tab_action.setShortcut(QKeySequence("Ctrl+T"))
         new_tab_action.triggered.connect(lambda: self.add_new_tab())
-        menu.addAction(new_tab_action)
+        main_menu.addAction(new_tab_action)
         new_window_action = QAction(self.tr_str("new_window"), self)
         new_window_action.setShortcut(QKeySequence("Ctrl+N"))
         new_window_action.triggered.connect(self.open_new_window)
-        menu.addAction(new_window_action)
+        main_menu.addAction(new_window_action)
         self.toggle_private_action = QAction("", self)
         self.toggle_private_action.setShortcut(QKeySequence("Ctrl+Shift+P"))
         self.toggle_private_action.triggered.connect(self.toggle_mode)
-        menu.addAction(self.toggle_private_action)
+        main_menu.addAction(self.toggle_private_action)
         if self.is_private:
             self.toggle_private_action.setText(self.tr_str("private_off"))
         else:
             self.toggle_private_action.setText(self.tr_str("private_on"))
         history_action = QAction(self.tr_str("history"), self)
         history_action.triggered.connect(self.show_history)
-        menu.addAction(history_action)
+        main_menu.addAction(history_action)
         downloads_action = QAction(self.tr_str("downloads"), self)
         downloads_action.triggered.connect(self.show_download_manager)
-        menu.addAction(downloads_action)
+        main_menu.addAction(downloads_action)
         bookmarks_action = QAction(self.tr_str("bookmarks"), self)
         bookmarks_action.triggered.connect(self.show_bookmarks_window)
-        menu.addAction(bookmarks_action)
-        menu.addSeparator()
+        main_menu.addAction(bookmarks_action)
+        main_menu.addSeparator()
         extensions_action = QAction(self.tr_str("extensions"), self)
         extensions_action.triggered.connect(self.show_extensions_dialog)
-        menu.addAction(extensions_action)
+        main_menu.addAction(extensions_action)
         settings_action = QAction(self.tr_str("settings"), self)
         settings_action.triggered.connect(self.open_settings_dialog)
-        menu.addAction(settings_action)
+        main_menu.addAction(settings_action)
         exit_action = QAction(self.tr_str("exit"), self)
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
-        menu.addAction(exit_action)
-        menu_button.setMenu(menu)
+        main_menu.addAction(exit_action)
+        menu_button.setMenu(main_menu)
         menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         navtb.addWidget(menu_button)
         self.progress = QProgressBar()
@@ -1340,16 +1779,16 @@ class MainWindow(QMainWindow):
         self.progress.setTextVisible(False)
         self.progress.hide()
         navtb.addWidget(self.progress)
-        self.download_manager = DownloadManagerWindow(self)
+        self.download_manager.setParent(self)
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
         self.tabs.setStyleSheet("""
-            QTabWidget::pane { 
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
+            QTabWidget::pane {
+                background: qlineargradient(x1:0, y:0, x2:1, y:1,
                     stop:0 rgba(30,30,30,0.7), stop:1 rgba(60,60,60,0.7));
-                border: none; 
-                border-radius: 8px; 
+                border: none;
+                border-radius: 8px;
             }
             QTabBar::tab {
                 background: rgba(40,40,40,0.8);
@@ -1378,104 +1817,176 @@ class MainWindow(QMainWindow):
             homepage = self.settings.get("homepage", "https://www.google.com")
             self.add_new_tab(QUrl(homepage), "Home")
 
+    def consoleMessage(self, level, message, line, sourceID):
+        if "Dev Tools is now avalible in russian" in message:
+            return
+        super().consoleMessage(level, message, line, sourceID)
+
+    def show_dev_tools(self):
+        current_page = self.current_webview().page()
+        if not hasattr(self, "dev_tools_window") or self.dev_tools_window is None:
+            self.dev_tools_window = QWebEngineView()
+            self.dev_tools_page = QWebEnginePage(self.profile, self.dev_tools_window)
+            self.dev_tools_window.setPage(self.dev_tools_page)
+            self.dev_tools_page.setInspectedPage(current_page)
+            self.dev_tools_window.setWindowTitle("Developer Tools")
+            self.dev_tools_window.setWindowIcon(QIcon(os.path.join(ICONS_DIR, "ico.png")))
+            self.dev_tools_window.resize(800, 600)
+            self.dev_tools_window.show()
+        else:
+            self.dev_tools_page.setInspectedPage(current_page)
+            self.dev_tools_window.show()
+            self.dev_tools_window.raise_()
+
     def init_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+W"), self, activated=self.close_current_tab_action)
         QShortcut(QKeySequence("Ctrl+Tab"), self, activated=self.switch_next_tab)
         QShortcut(QKeySequence("Ctrl+Shift+Tab"), self, activated=self.switch_prev_tab)
         QShortcut(QKeySequence("F12"), self, activated=self.show_dev_tools)
+        QShortcut(QKeySequence("Ctrl+Shift+C"), self, activated=self.open_chatgpt_sidebar)
 
-    # Добавлена функция show_dev_tools для устранения ошибки AttributeError
-    def show_dev_tools(self):
-        QMessageBox.information(self, "Dev Tools", "Developer Tools are not implemented yet.")
-
-    def load_custom_extensions(self):
-        for script in self.custom_extension_scripts:
-            self.profile.scripts().remove(script)
-        self.custom_extension_scripts.clear()
-        ext_list = load_extensions_from_file()
-        if not any(ext.get("name", "").lower() == "miblock" for ext in ext_list):
-            if os.path.exists(USER_SCRIPT_FILE):
-                with open(USER_SCRIPT_FILE, "r", encoding="utf-8") as f:
-                    code = f.read()
+    def handle_download(self, download_item: QWebEngineDownloadRequest):
+        mode = self.settings.get("download_mode", "ask")
+        if mode == "ask":
+            # Запрос у пользователя папки для загрузок
+            path = QFileDialog.getExistingDirectory(self, "Выберите папку для загрузок")
+            if path:
+                download_item.setDownloadDirectory(path)
             else:
-                code = "console.log('MiBlock is running!');"
-            ext_list.append({
-                "name": "miblock",
-                "code": code,
-                "enabled": True,
-                "description": TRANSLATIONS[self.settings["language"]].get("default_extension_description", "")
-            })
-            save_extensions_to_file(ext_list)
-        for ext in ext_list:
-            if ext.get("enabled", True):
-                script = QWebEngineScript()
-                script.setName(ext.get("name", "UserExtension"))
-                script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
-                script.setRunsOnSubFrames(True)
-                script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
-                script.setSourceCode(ext.get("code", ""))
-                self.profile.scripts().insert(script)
-                self.custom_extension_scripts.append(script)
-        save_extensions_to_file(ext_list)
+                download_item.cancel()
+                return
+        elif mode == "custom":
+            # Используем кастомный путь, если он задан и существует
+            custom_path = self.settings.get("download_path", "")
+            if custom_path and os.path.exists(custom_path):
+                download_item.setDownloadDirectory(custom_path)
+            else:
+                # Если кастомный путь не указан или не существует, используем папку по умолчанию
+                download_item.setDownloadDirectory(
+                    QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+                )
+        else:  # Режим "default"
+            download_item.setDownloadDirectory(
+                QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+            )
+        self.download_manager.add_download(download_item)
+        download_item.accept()
+        self.animate_download()
 
-    def update_extensions(self):
-        self.load_custom_extensions()
+    def animate_download(self):
+        final_size = QSize(30, 30)
+        icon_path = os.path.join(ICONS_DIR, "install.png")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(ICONS_DIR, "ico.png")
+        pix = QPixmap(icon_path)
+        pix = pix.scaled(final_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        rounded = QPixmap(final_size)
+        rounded.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, final_size.width(), final_size.height()), 6, 6)
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, pix)
+        painter.end()
+        pix = rounded
+        label = QLabel(self)
+        label.setPixmap(pix)
+        label.setStyleSheet("background: transparent; border: none;")
+        opacity_effect = QGraphicsOpacityEffect(label)
+        label.setGraphicsEffect(opacity_effect)
+        opacity_effect.setOpacity(1.0)
+        start_factor = 1.3
+        start_size = QSize(int(final_size.width() * start_factor),
+                           int(final_size.height() * start_factor))
+        label.resize(start_size)
+        label.show()
+        center = self.rect().center()
+        label.move(center.x() - start_size.width() // 2, center.y() - start_size.height() // 2)
+        anim_group = QSequentialAnimationGroup(self)
+        first_pos_anim = QPropertyAnimation(label, b"pos")
+        first_pos_anim.setDuration(500)
+        first_pos_anim.setStartValue(label.pos())
+        first_pos_anim.setEndValue(QPoint(label.x(), label.y() + 50))
+        first_pos_anim.setEasingCurve(QEasingCurve.Type.InOutSine)
+        final_btn_pos = self.download_btn.mapToGlobal(self.download_btn.rect().center())
+        final_btn_pos = self.mapFromGlobal(final_btn_pos)
+        second_pos_anim = QPropertyAnimation(label, b"pos")
+        second_pos_anim.setDuration(700)
+        second_pos_anim.setStartValue(QPoint(label.x(), label.y() + 50))
+        second_pos_anim.setEndValue(QPoint(final_btn_pos.x() - final_size.width() // 2,
+                                           final_btn_pos.y() - final_size.height() // 2))
+        second_pos_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        size_anim = QPropertyAnimation(label, b"size")
+        size_anim.setDuration(700)
+        size_anim.setStartValue(start_size)
+        size_anim.setEndValue(final_size)
+        size_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        opacity_anim = QPropertyAnimation(opacity_effect, b"opacity")
+        opacity_anim.setDuration(700)
+        opacity_anim.setStartValue(1.0)
+        opacity_anim.setEndValue(0.0)
+        opacity_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        parallel_group = QParallelAnimationGroup()
+        parallel_group.addAnimation(second_pos_anim)
+        parallel_group.addAnimation(size_anim)
+        parallel_group.addAnimation(opacity_anim)
+        anim_group.addAnimation(first_pos_anim)
+        anim_group.addAnimation(parallel_group)
+        def on_finished():
+            label.hide()
+            label.deleteLater()
+        anim_group.finished.connect(on_finished)
+        anim_group.start()
+        self.download_animations.append(anim_group)
 
-    def clear_browser_data_manually(self):
-        clear_browser_data(self.profile, self.cache_path, self.storage_path)
+    def add_new_tab(self, qurl: QUrl = None, label="Новая вкладка"):
+        if qurl is None:
+            qurl = QUrl(self.settings.get("homepage", "https://www.google.com"))
+        browser = QWebEngineView()
+        index = self.tabs.addTab(browser, "Новая вкладка")
+        browser.setPage(CustomWebEnginePage(self.profile, browser, self))
+        browser.setUrl(qurl)
+        # Здесь первым параметром передаем браузер, вторым URL
+        browser.urlChanged.connect(lambda url, b=browser: self.update_tab_title(b, url))
+        browser.iconChanged.connect(lambda icon, b=browser: self.update_tab_icon(b, icon))
+        browser.loadFinished.connect(lambda _: self.save_current_history())
+        i = self.tabs.addTab(browser, label)
+        self.tabs.setCurrentIndex(i)
 
-    def toggle_mode(self):
-        new_mode = not self.is_private
-        self.settings["is_private"] = new_mode
-        save_settings(self.settings)
-        new_win = MainWindow(settings=self.settings)
-        new_win.show()
-        self.close()
+        browser.page().titleChanged.connect(
+            lambda title, idx=index: self.tabs.setTabText(idx, title)
+        )
 
-    def open_settings_dialog(self):
-        dlg = SettingsDialog(self)
-        dlg.exec()
+        return browser
 
-    def show_extensions_dialog(self):
-        dlg = ExtensionsDialog(self)
-        dlg.exec()
+    # Исправленная функция: первым параметром – браузер (QWebEngineView), вторым – URL (QUrl)
+    def update_tab_title(self, browser, url):
+        index = self.tabs.indexOf(browser)
+        if index != -1:
+            title = browser.title()
+            self.tabs.setTabText(index, title)
+            self.tabs.setTabToolTip(index, url.toString())
 
-    def open_new_window(self):
-        new_win = MainWindow(settings=self.settings)
-        new_win.show()
-        self.child_windows.append(new_win)
-
-    def switch_next_tab(self):
-        if self.tabs.count() > 1:
-            self.tabs.setCurrentIndex((self.tabs.currentIndex() + 1) % self.tabs.count())
-
-    def switch_prev_tab(self):
-        if self.tabs.count() > 1:
-            self.tabs.setCurrentIndex((self.tabs.currentIndex() - 1) % self.tabs.count())
-
-    def close_current_tab_action(self):
-        if self.tabs.count() > 1:
-            self.close_current_tab(self.tabs.currentIndex())
-
-    def close_current_tab(self, index):
-        if self.tabs.count() > 1:
-            self.tabs.removeTab(index)
-
-    def tab_open_doubleclick(self, index):
-        if index == -1:
-            self.add_new_tab()
+    def update_tab_icon(self, browser, icon):
+        index = self.tabs.indexOf(browser)
+        if index != -1:
+            self.tabs.setTabIcon(index, icon)
 
     def navigate_back(self):
-        self.current_webview().back()
+        current_browser = self.tabs.currentWidget()
+        if current_browser:
+            current_browser.back()
 
     def navigate_forward(self):
-        self.current_webview().forward()
+        current_browser = self.tabs.currentWidget()
+        if current_browser:
+            current_browser.forward()
 
     def navigate_refresh(self):
-        self.current_webview().reload()
-
-    def current_webview(self):
-        return self.tabs.currentWidget()
+        current_browser = self.tabs.currentWidget()
+        if current_browser:
+            current_browser.reload()
 
     def navigate_to_url(self):
         text = self.urlbar.text().strip()
@@ -1497,108 +2008,42 @@ class MainWindow(QMainWindow):
                 engine = self.settings["search_engine"]
                 base = ENGINE_URLS.get(engine, ENGINE_URLS["google"])
                 url = base + query
-        elif not (text.startswith("http://") or text.startswith("https://")):
+        elif not text.startswith("http://") and not text.startswith("https://"):
             url = "http://" + text
         else:
             url = text
-        q = QUrl(url)
-        if q.isValid():
-            self.current_webview().load(q)
+        if self.current_webview():
+            self.current_webview().load(QUrl(url))
 
     def update_urlbar(self, index):
-        if self.tabs.widget(index):
-            w = self.tabs.widget(index)
-            new_url = w.url().toString()
-            self.urlbar.setText(new_url)
-            self.update_star_icon(new_url)
+        webview = self.tabs.widget(index)
+        if not webview:
+            return
+        qurl = webview.url()
+        self.urlbar.setText(qurl.toString())
+        self.urlbar.setCursorPosition(0)
+        self.update_bookmark_icon()
 
-    def add_new_tab(self, qurl=None, label="New Tab"):
-        if qurl is None:
-            if self.is_private:
-                qurl = QUrl("https://duckduckgo.com")
-                label = "DuckDuckGo"
-            else:
-                engine = self.settings["search_engine"]
-                base = ENGINE_URLS.get(engine, ENGINE_URLS["google"])
-                label = engine.capitalize()
-                qurl = QUrl(base)
-        browser = QWebEngineView()
-        page = CustomWebEnginePage(self.profile, browser, self)
-        browser.setPage(page)
-        browser.page().fullScreenRequested.connect(self.handleFullScreenRequested)
-        browser.load(qurl)
-        idx = self.tabs.addTab(browser, label)
-        self.tabs.setCurrentIndex(idx)
-        browser.urlChanged.connect(lambda url, b=browser: self.update_tab_url(b, url))
-        browser.loadFinished.connect(lambda ok, b=browser: self.on_load_finished(b))
-        browser.loadProgress.connect(lambda prog, b=browser: self.update_progress(prog, b))
-        self.animate_tab_open(browser)
-        return browser
+    def close_current_tab(self, index):
+        if self.tabs.count() < 2:
+            return
+        self.tabs.removeTab(index)
 
-    def handleFullScreenRequested(self, request):
-        request.accept()
-        if request.toggleOn():
-            self.showFullScreen()
-        else:
-            self.showNormal()
+    def close_current_tab_action(self):
+        self.close_current_tab(self.tabs.currentIndex())
 
-    def update_tab_url(self, browser, url):
-        if self.tabs.currentWidget() == browser:
-            self.urlbar.setText(url.toString())
-            self.update_star_icon(url.toString())
+    def switch_next_tab(self):
+        current = self.tabs.currentIndex()
+        total = self.tabs.count()
+        self.tabs.setCurrentIndex((current + 1) % total)
 
-    def update_tab_title(self, browser):
-        idx = self.tabs.indexOf(browser)
-        if idx != -1:
-            title = browser.page().title()
-            self.tabs.setTabText(idx, title)
-            return title
-        return ""
+    def switch_prev_tab(self):
+        current = self.tabs.currentIndex()
+        total = self.tabs.count()
+        self.tabs.setCurrentIndex((current - 1) % total)
 
-    def update_progress(self, progress, browser):
-        if self.current_webview() == browser:
-            self.progress.setValue(progress)
-            if progress < 100:
-                self.progress.show()
-            else:
-                self.progress.hide()
-
-    def on_load_finished(self, browser):
-        title = self.update_tab_title(browser)
-        url = browser.page().url().toString()
-        if not self.is_private and title and url:
-            history = load_history_from_file()
-            history.append({
-                "url": url,
-                "title": title,
-                "timestamp": datetime.datetime.now().isoformat()
-            })
-            save_history_to_file(history)
-        effect = QGraphicsOpacityEffect(browser)
-        browser.setGraphicsEffect(effect)
-        animation = QPropertyAnimation(effect, b"opacity")
-        animation.setDuration(300)
-        animation.setStartValue(0)
-        animation.setEndValue(1)
-        animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        animation.start()
-        self.animations.append(animation)
-        animation.finished.connect(lambda: self.animations.remove(animation))
-        if self.tabs.currentWidget() == browser:
-            self.update_star_icon(url)
-
-    def is_url_bookmarked(self, url: str) -> bool:
-        bookmarks = load_bookmarks()
-        for bm in bookmarks:
-            if bm.get("url") == url:
-                return True
-        return False
-
-    def update_star_icon(self, url: str):
-        if self.is_url_bookmarked(url):
-            self.bookmark_button.setIcon(QIcon(os.path.join(ICONS_DIR, "starfilled.png")))
-        else:
-            self.bookmark_button.setIcon(QIcon(os.path.join(ICONS_DIR, "star.png")))
+    def update_bookmark_icon(self):
+        self.bookmark_button.setIcon(QIcon(os.path.join(ICONS_DIR, "star.png")))
 
     def toggle_bookmark(self):
         view = self.current_webview()
@@ -1621,178 +2066,244 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Закладки", f"Страница '{title}' добавлена в закладки.")
         self.update_star_icon(url)
 
+    def show_history(self):
+        if self.is_private:
+            QMessageBox.information(self, "История", "В приватном режиме история не сохраняется.")
+            return
+        history_items = load_history_from_file()
+        if not history_items:
+            QMessageBox.information(self, "История", "История пуста.")
+            return
+        hist_win = HistoryWindow(history_items, self.load_url_from_history, self)
+        hist_win.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        hist_win.show()
+
+    def show_download_manager(self):
+        if self.download_manager.isVisible():
+            self.download_manager.hide()
+        else:
+            self.download_manager.show()
+
     def show_bookmarks_window(self):
         bookmarks = load_bookmarks()
-        bm_win = BookmarksWindow(bookmarks, self.load_url_from_history, self)
+        if not bookmarks:
+            QMessageBox.information(self, "Закладки", "Нет сохранённых закладок.")
+            return
+        bm_win = BookmarksWindow(bookmarks, self.load_url_from_history, parent=self)
         bm_win.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         bm_win.show()
 
-    def show_history(self):
-        if self.is_private:
-            return
-        items = load_history_from_file()
-        if not items:
-            return
-        hist_win = HistoryWindow(items, self.load_url_from_history, parent=self)
-        self.history_windows.append(hist_win)
-        hist_win.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        geom = self.geometry()
-        hist_win.setGeometry(geom.x() + geom.width() - 300, geom.y(), 300, geom.height())
-        hist_win.show()
 
-    def load_url_from_history(self, url):
-        self.current_webview().load(url)
+    def show_extensions_dialog(self):
+        dlg = ExtensionsDialog(self)
+        dlg.exec()
 
-    def show_download_manager(self):
-        self.download_manager.show()
-        self.download_manager.raise_()
+    def open_settings_dialog(self):
+        dlg = SettingsDialog(self)
+        dlg.exec()
 
-    def handle_download(self, download_item: QWebEngineDownloadRequest):
-        mode = self.settings.get("download_mode", "ask")
-        if mode == "ask":
-            dlg = QFileDialog(self, "Сохранить файл", download_item.downloadFileName())
-            dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
-            dlg.setFileMode(QFileDialog.FileMode.AnyFile)
-            dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
-            dlg.setStyleSheet("""
-                QFileDialog {
-                    background-color: #2b2b2b;
-                    color: #e0e0e0;
+    def show_first_launch_dialog(self):
+        dlg = FirstLaunchDialog(self)
+        dlg.exec()
+
+    def update_extensions(self):
+        self.load_custom_extensions()
+    def tab_open_doubleclick(self, index):
+        if index == -1:
+            self.add_new_tab()
+
+    def clear_browser_data_manually(self):
+        clear_browser_data(self.profile, self.cache_path, self.storage_path)
+
+    def inject_allowfullscreen_script(self):
+        js_code = """
+        document.addEventListener('webkitfullscreenchange', function(e) {
+            if (!document.webkitIsFullScreen) {
+                document.webkitExitFullscreen();
+            }
+        }, false);
+        """
+        script = QWebEngineScript()
+        script.setName("AllowFullscreenScript")
+        script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        script.setRunsOnSubFrames(True)
+        script.setSourceCode(js_code)
+        self.profile.scripts().insert(script)
+    def open_new_window(self):
+        new_win = MainWindow(settings=self.settings)
+        new_win.show()
+        self.child_windows.append(new_win)
+
+    def toggle_mode(self):
+        new_mode = not self.is_private
+        self.settings["is_private"] = new_mode
+        save_settings(self.settings)
+        new_win = MainWindow(settings=self.settings)
+        new_win.show()
+        self.close()
+
+    def show_downloads_menu(self):
+        menu = self.create_downloads_menu()
+        global_pos = self.download_btn.mapToGlobal(self.download_btn.rect().bottomLeft())
+        menu_width = menu.sizeHint().width()
+        menu.exec(QPoint(global_pos.x() - menu_width, global_pos.y()))
+
+    def inject_chatgpt_js(self, ok):
+        if ok:
+            js = """
+            (function(){
+                document.body.style.backgroundColor = "#1e1e1e";
+                document.body.style.color = "#e0e0e0";
+                document.body.style.fontFamily = "Helvetica, Arial, sans-serif";
+                var header = document.querySelector("header");
+                if(header) { header.style.display = "none"; }
+                var chatContainer = document.querySelector(".overflow-y-auto");
+                if(chatContainer){
+                    chatContainer.style.padding = "20px";
+                    chatContainer.style.maxWidth = "800px";
+                    chatContainer.style.margin = "0 auto";
                 }
-                QLineEdit {
-                    background-color: #1e1e1e;
-                    color: #e0e0e0;
-                }
-                QPushButton {
-                    background-color: #808080;
-                    border: none;
-                    padding: 6px 12px;
-                    color: #FFFFFF;
-                }
-                QPushButton:hover {
-                    background-color: #707070;
-                }
-            """)
-            if dlg.exec():
-                filename = dlg.selectedFiles()[0]
+            })();
+            """
+            self.chatgpt_view.page().runJavaScript(js)
+
+    def load_url_from_history(self, qurl):
+        self.current_webview().load(qurl)
+
+    def current_webview(self):
+        return self.tabs.currentWidget()
+
+    def update_star_icon(self, url: str):
+        if self.is_url_bookmarked(url):
+            self.bookmark_button.setIcon(QIcon(os.path.join(ICONS_DIR, "starfilled.png")))
+        else:
+            self.bookmark_button.setIcon(QIcon(os.path.join(ICONS_DIR, "star.png")))
+
+    def is_url_bookmarked(self, url: str) -> bool:
+        bookmarks = load_bookmarks()
+        for bm in bookmarks:
+            if bm.get("url") == url:
+                return True
+        return False
+
+    def create_downloads_menu(self):
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2e2e2e;
+                color: #e0e0e0;
+                border: 1px solid #444;
+                border-radius: 8px;
+                padding: 5px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #505050;
+                color: #ffffff;
+            }
+        """)
+
+        if self.download_manager.tree.topLevelItemCount() == 0:
+            dummy_action = QAction("Нет загрузок", menu)
+            dummy_action.setEnabled(False)
+            menu.addAction(dummy_action)
+        else:
+            for i in range(self.download_manager.tree.topLevelItemCount()):
+                item = self.download_manager.tree.topLevelItem(i)
+                file_name = item.text(0)
+                file_path = item.data(0, Qt.ItemDataRole.UserRole)
+
+                widget = QWidget()
+                hlayout = QHBoxLayout(widget)
+                hlayout.setContentsMargins(5, 5, 5, 5)
+                hlayout.setSpacing(10)
+
+                # Метка с именем файла (с эффектом наведения)
+                label = QLabel(file_name)
+                label.setStyleSheet("""
+                    QLabel {
+                        color: #e0e0e0;
+                        padding: 4px;
+                        border-radius: 4px;
+                    }
+                    QLabel:hover {
+                        background-color: #3a3a3a;
+                        color: #ffffff;
+                    }
+                """)
+
+                def make_label_click(item=item):
+                    def on_click(event):
+                        self.download_manager.open_downloaded_file(item, 0)
+
+                    return on_click
+
+                label.mousePressEvent = make_label_click()
+                hlayout.addWidget(label)
+
+                # Кнопка "Проводник" (с эффектом наведения)
+                btn_explorer = QPushButton()
+                btn_explorer.setIcon(QIcon(os.path.join(ICONS_DIR, "explorer.png")))
+                btn_explorer.setFixedSize(24, 24)
+                btn_explorer.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background-color: transparent;
+                    }
+                    QPushButton:hover {
+                        background-color: #505050;
+                        border-radius: 4px;
+                    }
+                """)
+
+                def make_explorer_click(item=item):
+                    def on_clicked():
+                        path = item.data(0, Qt.ItemDataRole.UserRole)
+                        if path and os.path.exists(path):
+                            QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(path)))
+
+                    return on_clicked
+
+                btn_explorer.clicked.connect(make_explorer_click())
+                hlayout.addWidget(btn_explorer)
+
+                act = QWidgetAction(menu)
+                act.setDefaultWidget(widget)
+                menu.addAction(act)
+
+            menu.addSeparator()
+
+            # Кнопка "Показать все загрузки"
+            show_all_action = QAction(QIcon(os.path.join(ICONS_DIR, "download.png")), "Показать все загрузки", menu)
+            show_all_action.triggered.connect(self.show_download_manager)
+            menu.addAction(show_all_action)
+
+        return menu
+
+    def open_chatgpt_sidebar(self):
+        if self.chatgpt_dock is not None:
+            if self.chatgpt_dock.isVisible():
+                self.chatgpt_dock.hide()
             else:
-                download_item.cancel()
-                return
-        elif mode == "default":
-            filename = os.path.join(
-                QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation),
-                download_item.downloadFileName()
-            )
-        elif mode == "custom":
-            path = self.settings.get("download_path", "")
-            if not path:
-                path = QFileDialog.getExistingDirectory(self, "Выберите папку для загрузок")
-                if not path:
-                    download_item.cancel()
-                    return
-            filename = os.path.join(path, download_item.downloadFileName())
-        else:
-            dlg = QFileDialog(self, "Сохранить файл", download_item.downloadFileName())
-            dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
-            dlg.setFileMode(QFileDialog.FileMode.AnyFile)
-            if dlg.exec():
-                filename = dlg.selectedFiles()[0]
-            else:
-                download_item.cancel()
-                return
-        directory = os.path.dirname(filename)
-        file_name = os.path.basename(filename)
-        download_item.setDownloadDirectory(directory)
-        download_item.setDownloadFileName(file_name)
-        download_item.accept()
-        self.download_manager.add_download(download_item)
-        self.animate_download()
-
-    def animate_tab_open(self, widget):
-        effect = QGraphicsOpacityEffect(widget)
-        widget.setGraphicsEffect(effect)
-        anim = QPropertyAnimation(effect, b"opacity")
-        anim.setDuration(300)
-        anim.setStartValue(0)
-        anim.setEndValue(1)
-        anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        anim.start()
-        self.animations.append(anim)
-        anim.finished.connect(lambda: self.animations.remove(anim))
-
-    def animate_download(self):
-        if self.current_webview():
-            center = self.current_webview().mapTo(self, self.current_webview().rect().center())
-        else:
-            center = self.rect().center()
-        up_left = QPoint(center.x()-40, center.y()-30)
-        down_right = QPoint(up_left.x()+80, up_left.y()+60)
-        if hasattr(self, "download_button"):
-            target = self.mapFromGlobal(self.download_button.mapToGlobal(self.download_button.rect().center()))
-        else:
-            target = self.rect().center()
-        label = QLabel(self)
-        icon = QIcon(os.path.join(ICONS_DIR, "install.png"))
-        label.setPixmap(icon.pixmap(64,64))
-        label.setFixedSize(64,64)
-        label.move(center)
-        label.show()
-        opacity_effect = QGraphicsOpacityEffect(label)
-        label.setGraphicsEffect(opacity_effect)
-        opacity_anim = QPropertyAnimation(opacity_effect, b"opacity")
-        opacity_anim.setDuration(2000)
-        opacity_anim.setStartValue(1.0)
-        opacity_anim.setEndValue(0.0)
-        opacity_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
-        pos1 = QPropertyAnimation(label, b"pos")
-        pos1.setDuration(500)
-        pos1.setStartValue(center)
-        pos1.setEndValue(up_left)
-        pos1.setEasingCurve(QEasingCurve.Type.OutCubic)
-        pos2 = QPropertyAnimation(label, b"pos")
-        pos2.setDuration(600)
-        pos2.setStartValue(up_left)
-        pos2.setEndValue(down_right)
-        pos2.setEasingCurve(QEasingCurve.Type.InOutCubic)
-        pos3 = QPropertyAnimation(label, b"pos")
-        pos3.setDuration(900)
-        pos3.setStartValue(down_right)
-        pos3.setEndValue(target)
-        pos3.setEasingCurve(QEasingCurve.Type.InOutCubic)
-        seq = QSequentialAnimationGroup()
-        seq.addAnimation(pos1)
-        seq.addAnimation(pos2)
-        seq.addAnimation(pos3)
-        group = QParallelAnimationGroup(self)
-        group.addAnimation(seq)
-        group.addAnimation(opacity_anim)
-        group.start()
-        self.animations.append(group)
-        group.finished.connect(lambda: (label.deleteLater(), self.animations.remove(group), self.bounce_download_icon()))
-
-    def bounce_download_icon(self):
-        if not hasattr(self, "download_button"):
+                self.chatgpt_dock.show()
             return
-        orig = self.download_button.iconSize()
-        bounce = QPropertyAnimation(self.download_button, b"iconSize")
-        bounce.setDuration(300)
-        bounce.setKeyValueAt(0, orig)
-        enlarged = QSize(orig.width()+6, orig.height()+6)
-        bounce.setKeyValueAt(0.5, enlarged)
-        bounce.setKeyValueAt(1, orig)
-        bounce.setEasingCurve(QEasingCurve.Type.OutBounce)
-        bounce.start()
-        self.animations.append(bounce)
-        bounce.finished.connect(lambda: self.animations.remove(bounce))
+        self.chatgpt_dock = QDockWidget("ChatGPT", self)
+        self.chatgpt_dock.setMinimumSize(QSize(300, 200))
+        self.chatgpt_dock.resize(300, 200)
+        self.chatgpt_view = QWebEngineView(self.chatgpt_dock)
+        page = CustomWebEnginePage(self.profile, self.chatgpt_view, self)
+        self.chatgpt_view.setPage(page)
+        self.chatgpt_view.load(QUrl("https://chat.openai.com/chat"))
+        self.chatgpt_dock.setWidget(self.chatgpt_view)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.chatgpt_dock)
+        self.chatgpt_view.loadFinished.connect(self.inject_chatgpt_js)
 
-    def update_tab_url(self, browser, url):
-        if self.tabs.currentWidget() == browser:
-            self.urlbar.setText(url.toString())
-            self.update_star_icon(url.toString())
-
-# -------------------- Main Application --------------------
-if __name__ == "__main__":
+# -------------------- Main --------------------
+if __name__ == '__main__':
     app = QApplication(sys.argv)
-    main_win = MainWindow()
-    main_win.show()
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec())
