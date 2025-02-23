@@ -12,6 +12,30 @@ document.addEventListener("DOMContentLoaded", function() {
   const selectedEngine = document.getElementById('selected-engine');
   const dropdownOptions = document.getElementById('dropdown-options');
 
+  // Объект сопоставления поисковых систем с их настройками
+  const searchEngineMapping = {
+    duckduckgo: { text: "DuckDuckGo", url: "https://duckduckgo.com/?q=", img: "assets/icons/duck.png" },
+    bing: { text: "Bing", url: "https://www.bing.com/search?q=", img: "assets/icons/bing.png" },
+    google: { text: "Google", url: "https://www.google.com/search?q=", img: "assets/icons/google.png" },
+    yandex: { text: "Yandex", url: "https://www.yandex.ru/search/?text=", img: "assets/icons/yandex.png" }
+  };
+
+  // Загрузка настроек из settings.json
+  fetch('assets/config/settings.json')
+    .then(response => response.json())
+    .then(settings => {
+      const engine = settings.search_engine;
+      if (searchEngineMapping[engine]) {
+        const config = searchEngineMapping[engine];
+        selectedEngine.querySelector('img').src = config.img;
+        selectedEngine.querySelector('span').innerText = config.text;
+        selectedEngine.dataset.url = config.url;
+      } else {
+        console.error("Неверное значение search_engine в настройках:", engine);
+      }
+    })
+    .catch(err => console.error("Ошибка загрузки настроек:", err));
+
   // Открытие/закрытие списка поисковых систем
   selectedEngine.addEventListener('click', function() {
     dropdownOptions.style.display = dropdownOptions.style.display === 'block' ? 'none' : 'block';
@@ -22,76 +46,45 @@ document.addEventListener("DOMContentLoaded", function() {
     option.addEventListener('click', function() {
       const selectedImg = this.querySelector('img').src;
       const selectedText = this.querySelector('span').innerText;
-      const selectedURL = this.dataset.url;
+      const selectedKey = this.dataset.engine;
 
-      selectedEngine.querySelector('img').src = selectedImg;
-      selectedEngine.querySelector('span').innerText = selectedText;
-      selectedEngine.dataset.url = selectedURL;
+      if (searchEngineMapping[selectedKey]) {
+        selectedEngine.querySelector('img').src = selectedImg;
+        selectedEngine.querySelector('span').innerText = selectedText;
+        selectedEngine.dataset.url = searchEngineMapping[selectedKey].url;
+      }
 
-      dropdownOptions.style.display = 'none'; // Закрываем список после выбора
+      dropdownOptions.style.display = 'none';
     });
   });
 
-  // === Функция для поиска ===
-  function searchQuery() {
+  // === Поиск ===
+  window.searchQuery = function() {
     const query = document.getElementById('search').value.trim();
-    if (query !== "") {
-      // Регулярное выражение для проверки, начинается ли строка с http:// или https://
-      const urlPattern = /^(https?:\/\/)/;
+    if (query === "") return;
 
-      // Если строка не начинается с http:// или https://, добавляем https://
-      let searchURL = query;
+    const searchURL = selectedEngine.dataset.url + encodeURIComponent(query);
+    window.location.href = searchURL;
+  };
 
-      if (!urlPattern.test(query)) {
-        // Добавляем https://, если протокол не указан
-        searchURL = "https://" + query;
-      }
-
-      // Пытаемся открыть сайт
-      window.location.href = searchURL;
-    }
-  }
-
-  // Обработчик нажатия Enter
   document.getElementById('search').addEventListener('keydown', function(event) {
-    if (event.key === 'Enter') {
-      searchQuery();
-    }
+    if (event.key === 'Enter') searchQuery();
   });
 
-  // Обработчик клика по кнопке поиска
   document.getElementById('search-button').addEventListener('click', searchQuery);
 
   // === Фоновая анимация Python-команд ===
   const commands = [
-    "print('Hello, World!')",
-    "for i in range(10):",
-    "if __name__ == '__main__':",
-    "def my_function():",
-    "import this",
-    "lambda x: x * 2",
-    "list_comp = [x for x in range(5)]",
-    "with open('file.txt', 'r') as f:",
-    "try:",
-    "except Exception as e:",
-    "import sys",
-    "class MyClass:",
-    "import os",
-    "while True:",
-    "elif x > 0:",
-    "raise ValueError('Invalid value')",
-    "import random",
-    "my_list = [1, 2, 3]",
-    "print(len(my_list))",
-    "my_dict = {'a': 1, 'b': 2}",
-    "sorted_list = sorted(my_list)",
-    "def add(a, b): return a + b",
-    "import math",
-    "print(math.pi)",
-    "for index, value in enumerate(my_list):",
-    "my_set = set([1, 2, 2, 3])",
-    "def decorator(func):",
-    "class AnotherClass(MyClass):",
+    "print('Hello, World!')", "for i in range(10):", "if __name__ == '__main__':",
+    "def my_function():", "import this", "lambda x: x * 2",
+    "list_comp = [x for x in range(5)]", "with open('file.txt', 'r') as f:",
+    "try:", "except Exception as e:", "import sys", "class MyClass:",
+    "import os", "while True:", "elif x > 0:", "raise ValueError('Invalid value')",
+    "import random", "my_list = [1, 2, 3]", "print(len(my_list))",
+    "my_dict = {'a': 1, 'b': 2}", "sorted_list = sorted(my_list)",
+    "def add(a, b): return a + b", "import math", "print(math.pi)",
+    "for index, value in enumerate(my_list):", "my_set = set([1, 2, 2, 3])",
+    "def decorator(func):", "class AnotherClass(MyClass):",
     "from datetime import datetime"
   ];
 
@@ -105,7 +98,7 @@ document.addEventListener("DOMContentLoaded", function() {
     let randomTop;
     do {
       randomTop = Math.random() * 100;
-    } while (randomTop > 40 && randomTop < 60); // Запрещаем спавн в центре
+    } while (randomTop > 40 && randomTop < 60);
 
     codeElement.style.top = randomTop + "%";
     codeElement.style.left = Math.random() * 90 + "%";

@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QCheckBox, QInputDialog, QDockWidget, QGraphicsOpacityEffect, QWidgetAction
 )
 from PyQt6.QtGui import (
-    QIcon, QAction, QDesktopServices, QFont, QShortcut, QKeySequence, QPixmap, QPainter, QPainterPath, QCursor, QGuiApplication, QMovie, QFont, QFontDatabase,
+    QIcon, QAction, QDesktopServices, QFont, QShortcut, QKeySequence, QPixmap, QPainter, QPainterPath, QCursor, QGuiApplication, QMovie, QFont, QFontDatabase, QPalette, QColor
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
@@ -143,6 +143,64 @@ TRANSLATIONS = {
         "close": "Close"
     }
 }
+
+
+# Встроенное расширение: Google Dark (UserScript)
+GOOGLE_DARK_EXTENSION = """// ==UserScript==
+// @name         Google Dark
+// @version      0.3
+// @description  Google dark theme.
+// @author       ekin@gmx.us
+// @namespace    https://greasyfork.org/en/users/6473-ekin
+// @include      /^https?://www\\.google\\.[a-z\\.]+/.*/
+// @grant        none
+// @require      https://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js
+// @downloadURL  https://update.greasyfork.org/scripts/6666/Google%20Dark.user.js
+// @updateURL    https://update.greasyfork.org/scripts/6666/Google%20Dark.meta.js
+// ==/UserScript==
+
+function initStyle() {
+    jQuery("html, body").css("color", "#666");
+    jQuery("html, body").css("background-color", "#2C2C2C");
+    jQuery(".fbar").css("background-color", "#2C2C2C");
+    jQuery("#fbar").css("background-color", "#2C2C2C");
+    jQuery("#fbar").css("border-top", "1px solid #494949");
+    jQuery("#topabar").css("background-color", "#2C2C2C");
+    jQuery("#hdtbSum").css("border-bottom", "1px solid #494949");
+    jQuery("#center_col ._Ak").css("border-bottom", "1px solid #494949");
+    jQuery("a:visited").css("color", "#fff");
+    jQuery("a").css("color", "#8B8B8B");
+    jQuery("h3.r a").css("color", "#8C8C8C");
+    jQuery("#res a").css("background-color", "rgba(0, 0, 0, 0)");
+    jQuery("#nav").css("opacity", "0.8");
+    jQuery("#hplogo").css("opacity", "0.8");
+    jQuery("#hdtbSum").css("background-color", "#2C2C2C");
+    jQuery(".gb_Sb").css("background-color", "#3D3D3D");
+    jQuery(".sect").css("color", "#666");
+    jQuery(".sect").css("border-bottom", "1px solid #494949");
+    jQuery(".mitem").css("background-color", "#424242");
+    jQuery(".mitem:unhover").css("background-color", "#424242");
+    jQuery(".appbar").css("border-bottom", "1px solid #494949");
+    jQuery(".ab_button").css("background-image", "-webkit-linear-gradient(top,#515151,#474747)");
+    jQuery(".ab_button").css("background-image", "linear-gradient(top,#515151,#474747)");
+    jQuery(".ab_button").css("background-color", "#515151");
+    jQuery(".ab_button.selected").css("border", "1px solid #494949");
+    jQuery("#hdtb_tls:hover").css("background-image", "-webkit-linear-gradient(top,#515151,#474747)");
+    jQuery("#hdtb_tls:hover").css("background-image", "linear-gradient(top,#515151,#474747)");
+    jQuery("#hdtb_tls:hover").css("background-color", "#515151");
+    jQuery("#hdtbMenus").css("background-color", "#424242");
+    jQuery(".gb_na .gb_V").css("background-color", "#454545");
+    jQuery(".gb_na .gb_V").css("border-color", "#545454;");
+    jQuery(".flyr-o").css("opacity", "0.1");
+}
+
+initStyle();
+
+setInterval(function() {
+    initStyle();
+}, 250);
+"""
+
 
 # -------------------- Utility Functions --------------------
 def load_settings():
@@ -1572,6 +1630,30 @@ class MainWindow(QMainWindow):
             self.settings["first_launch"] = False
             save_settings(self.settings)
 
+
+    def load_custom_extensions(self):
+        ext_list = load_extensions()
+        # Добавляем встроенное расширение Google Dark, если его ещё нет
+        if not any(ext.get("name", "").lower() == "google dark" for ext in ext_list):
+            ext_list.append({
+                "name": "Google Dark",
+                "code": GOOGLE_DARK_EXTENSION,
+                "enabled": True,
+                "description": "Google dark theme built-in extension."
+            })
+            save_extensions(ext_list)
+        # Загружаем все включённые расширения как скрипты
+        for ext in ext_list:
+            if ext.get("enabled", True):
+                script = QWebEngineScript()
+                script.setName(ext.get("name", "UserExtension"))
+                script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                script.setRunsOnSubFrames(True)
+                script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                script.setSourceCode(ext.get("code", ""))
+                self.profile.scripts().insert(script)
+                self.custom_extension_scripts.append(script)
+    
     def save_current_history(self):
         self.progress.hide()
         webview = self.current_webview()
@@ -1734,7 +1816,9 @@ class MainWindow(QMainWindow):
         search_layout = QHBoxLayout(search_widget)
         search_layout.setContentsMargins(0, 0, 0, 0)
         search_layout.setSpacing(5)
-        self.urlbar = QLineEdit()
+# Создание адресной строки с запретом на автоматический фокус
+        self.urlbar = QLineEdit(self)
+        self.urlbar.setFocusPolicy(Qt.FocusPolicy.NoFocus)  
         self.urlbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.urlbar.returnPressed.connect(self.navigate_to_url)
         search_layout.addWidget(self.urlbar)
@@ -2093,22 +2177,55 @@ class MainWindow(QMainWindow):
             url = text
         if self.current_webview():
             self.current_webview().load(QUrl(url))
+            
+            
 
     def update_urlbar(self, index):
         webview = self.tabs.widget(index)
         if not webview:
             return
-        qurl = webview.url()
+
+        # Получаем URL стандартным способом
+        qurl = webview.page().url()  # Используем page().url(), а не webview.url()
         url_str = qurl.toString()
 
-        # Если URL начинается с "file://", не показываем его (ставим пустую строку)
-        if url_str.startswith("file:///"):
-            self.urlbar.setText("")
+    # Обновляем адресную строку
+        if url_str:
+            if url_str.startswith("file://"):
+                self.urlbar.setText("Файл")
+            else:
+                self.urlbar.setText(url_str)
         else:
-            self.urlbar.setText(url_str)
+            self.urlbar.setText("Загрузка...")  # Временно ставим "Загрузка..."
 
-        self.urlbar.setCursorPosition(0)
-        self.update_bookmark_icon()
+    # Функция для обновления после загрузки страницы
+    # Обработчик загрузки страницы
+    def on_load_finished():
+        update_url()  # Обновляем URL после загрузки страницы
+
+    # Функция обновления URL
+    def update_url():
+        qurl = webview.page().url().toString()
+        if qurl:
+            if qurl.startswith("file://"):
+                self.urlbar.setText("Файл")
+            else:
+                self.urlbar.setText(qurl)
+        else:
+            self.urlbar.setText("Ошибка загрузки")
+            
+        # Обработчик изменения URL (например, если сайт делает редирект)
+        def on_url_changed():
+            update_url()  # Обновляем URL при изменении адреса
+
+    # Подключаем сигналы
+        webview.loadFinished.connect(on_load_finished)
+        webview.urlChanged.connect(on_url_changed)
+
+        # Первичное обновление (без него строка будет пустая, пока не загрузится страница)
+        update_url()
+
+
 
     def close_current_tab(self, index):
         if self.tabs.count() < 2:
@@ -2386,9 +2503,42 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.chatgpt_dock)
         self.chatgpt_view.loadFinished.connect(self.inject_chatgpt_js)
 
+def set_dark_palette(app):
+    dark_palette = QPalette()
+    dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.Text, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
+    dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(0, 0, 0))
+    app.setPalette(dark_palette)
+
 # -------------------- Main --------------------
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
+    
+    # Загрузка настроек
+    settings = load_settings()
+    
+    # Глобально задаём шрифт
+    app.setFont(QFont(settings["font_family"], settings["font_size"]))
+    
+    # Применяем тёмную палитру
+    set_dark_palette(app)
+    
+    # Если есть файл QSS для тёмной темы, загружаем его
+    qss_path = os.path.join(BASE_DIR, "dark_theme.qss")
+    if os.path.exists(qss_path):
+        with open(qss_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+    
+    window = MainWindow(settings)
     window.show()
     sys.exit(app.exec())

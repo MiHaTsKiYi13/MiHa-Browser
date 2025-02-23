@@ -13,12 +13,12 @@ from PyQt6.QtWidgets import (
     QComboBox, QCheckBox, QInputDialog, QDockWidget, QGraphicsOpacityEffect, QWidgetAction
 )
 from PyQt6.QtGui import (
-    QIcon, QAction, QDesktopServices, QFont, QShortcut, QKeySequence, QPixmap, QPainter, QPainterPath, QCursor, QGuiApplication, QMovie
+    QIcon, QAction, QDesktopServices, QFont, QShortcut, QKeySequence, QPixmap, QPainter, QPainterPath, QCursor, QGuiApplication, QMovie, QFont, QFontDatabase, QPalette, QColor
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEnginePage, QWebEngineScript, QWebEngineDownloadRequest,
-    QWebEngineUrlRequestInterceptor, QWebEngineUrlRequestInfo, QWebEngineFullScreenRequest
+    QWebEngineUrlRequestInterceptor, QWebEngineUrlRequestInfo, QWebEngineFullScreenRequest, QWebEngineSettings
 )
 
 # -------------------- Paths and Configuration --------------------
@@ -33,6 +33,10 @@ SETTINGS_FILE = os.path.join(CONFIGS_DIR, "settings.json")
 EXTENSIONS_FILE = os.path.join(CONFIGS_DIR, "extensions.json")
 BOOKMARKS_FILE = os.path.join(CONFIGS_DIR, "bookmarks.json")
 EXCEPTIONS_FILE = os.path.join(CONFIGS_DIR, "exceptions.json")
+
+# Альтернативный путь (site/global/assets/config/settings.json)
+ALT_CONFIG_DIR = os.path.join(BASE_DIR, "site", "global", "assets", "config")
+ALT_SETTINGS_FILE = os.path.join(ALT_CONFIG_DIR, "settings.json")
 
 EXTENSIONS_DIR = os.path.join(BASE_DIR, "extensions")
 os.makedirs(EXTENSIONS_DIR, exist_ok=True)
@@ -140,15 +144,77 @@ TRANSLATIONS = {
     }
 }
 
+
+# Встроенное расширение: Google Dark (UserScript)
+GOOGLE_DARK_EXTENSION = """// ==UserScript==
+// @name         Google Dark
+// @version      0.3
+// @description  Google dark theme.
+// @author       ekin@gmx.us
+// @namespace    https://greasyfork.org/en/users/6473-ekin
+// @include      /^https?://www\\.google\\.[a-z\\.]+/.*/
+// @grant        none
+// @require      https://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js
+// @downloadURL  https://update.greasyfork.org/scripts/6666/Google%20Dark.user.js
+// @updateURL    https://update.greasyfork.org/scripts/6666/Google%20Dark.meta.js
+// ==/UserScript==
+
+function initStyle() {
+    jQuery("html, body").css("color", "#666");
+    jQuery("html, body").css("background-color", "#2C2C2C");
+    jQuery(".fbar").css("background-color", "#2C2C2C");
+    jQuery("#fbar").css("background-color", "#2C2C2C");
+    jQuery("#fbar").css("border-top", "1px solid #494949");
+    jQuery("#topabar").css("background-color", "#2C2C2C");
+    jQuery("#hdtbSum").css("border-bottom", "1px solid #494949");
+    jQuery("#center_col ._Ak").css("border-bottom", "1px solid #494949");
+    jQuery("a:visited").css("color", "#fff");
+    jQuery("a").css("color", "#8B8B8B");
+    jQuery("h3.r a").css("color", "#8C8C8C");
+    jQuery("#res a").css("background-color", "rgba(0, 0, 0, 0)");
+    jQuery("#nav").css("opacity", "0.8");
+    jQuery("#hplogo").css("opacity", "0.8");
+    jQuery("#hdtbSum").css("background-color", "#2C2C2C");
+    jQuery(".gb_Sb").css("background-color", "#3D3D3D");
+    jQuery(".sect").css("color", "#666");
+    jQuery(".sect").css("border-bottom", "1px solid #494949");
+    jQuery(".mitem").css("background-color", "#424242");
+    jQuery(".mitem:unhover").css("background-color", "#424242");
+    jQuery(".appbar").css("border-bottom", "1px solid #494949");
+    jQuery(".ab_button").css("background-image", "-webkit-linear-gradient(top,#515151,#474747)");
+    jQuery(".ab_button").css("background-image", "linear-gradient(top,#515151,#474747)");
+    jQuery(".ab_button").css("background-color", "#515151");
+    jQuery(".ab_button.selected").css("border", "1px solid #494949");
+    jQuery("#hdtb_tls:hover").css("background-image", "-webkit-linear-gradient(top,#515151,#474747)");
+    jQuery("#hdtb_tls:hover").css("background-image", "linear-gradient(top,#515151,#474747)");
+    jQuery("#hdtb_tls:hover").css("background-color", "#515151");
+    jQuery("#hdtbMenus").css("background-color", "#424242");
+    jQuery(".gb_na .gb_V").css("background-color", "#454545");
+    jQuery(".gb_na .gb_V").css("border-color", "#545454;");
+    jQuery(".flyr-o").css("opacity", "0.1");
+}
+
+initStyle();
+
+setInterval(function() {
+    initStyle();
+}, 250);
+"""
+
+
 # -------------------- Utility Functions --------------------
 def load_settings():
+    base_dir = os.path.dirname(os.path.abspath(__file__))  # Определяем текущую папку
+    homepage_path = os.path.join(base_dir, "site", "global", "index.html")  # Путь к index.html
+    homepage_url = f"file:///{homepage_path.replace(os.sep, '/')}"  # Преобразуем в URL
+
     default_settings = {
         "is_private": False,
         "search_engine": "google",
         "language": "ru",
-        "font_family": "Fira Code Mono",
+        "font_family": "Poppins",
         "font_size": 10,
-        "homepage": "https://www.google.com",
+        "homepage": homepage_url,  # Принудительно заменяем homepage
         "download_mode": "ask",
         "download_path": "",
         "delete_on_close": False,
@@ -156,22 +222,35 @@ def load_settings():
         "ui_theme": "Default",
         "first_launch": True
     }
+
+    # Загружаем сохранённые настройки, если файл существует
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for k, v in default_settings.items():
-                if k not in data:
-                    data[k] = v
-            return data
-        except:
-            return default_settings
-    else:
-        return default_settings
+                user_settings = json.load(f)
+                default_settings.update(user_settings)  # Обновляем значениями пользователя
+        except (json.JSONDecodeError, OSError):
+            print("Ошибка при загрузке настроек, используются значения по умолчанию.")
+
+    # Принудительно устанавливаем homepage, даже если в json сохранено другое значение
+    default_settings["homepage"] = homepage_url
+
+    return default_settings
+
 
 def save_settings(settings: dict):
+    """Сохраняет настройки сразу в два файла."""
+    # Сохранение в основной файл
+    os.makedirs(CONFIGS_DIR, exist_ok=True)  # Создаёт папку, если её нет
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings, f, ensure_ascii=False, indent=2)
+
+    # Сохранение в альтернативное местоположение
+    os.makedirs(ALT_CONFIG_DIR, exist_ok=True)  # Создаёт папку, если её нет
+    with open(ALT_SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+
+    print(f"Настройки сохранены в:\n 1) {SETTINGS_FILE}\n 2) {ALT_SETTINGS_FILE}")
 
 def load_history_from_file():
     if os.path.exists(HISTORY_FILE):
@@ -441,6 +520,13 @@ class ManageExceptionsDialog(QDialog):
         for domain in self.exceptions:
             item = QTreeWidgetItem([domain])
             self.tree.addTopLevelItem(item)
+
+
+    def home(self):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        homepage_path = os.path.join(base_dir, "site", "global", "index.html")
+        homepage_url = f"file:///{homepage_path.replace(os.sep, '/')}"
+
 
     def add_exception(self):
         domain, ok = QInputDialog.getText(self, "Добавить исключение", "Введите домен:")
@@ -1318,8 +1404,13 @@ class SettingsDialog(QDialog):
         new_dl_mode = dl_map.get(idx_dl, "ask")
         new_dl_path = self.le_path.text()
 
+        # Принудительно устанавливаем путь к index.html, даже если пользователь менял вручную
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        homepage_path = os.path.join(base_dir, "site", "global", "index.html")
+        homepage_url = f"file:///{homepage_path.replace(os.sep, '/')}"
+
         self.parent_win.settings["search_engine"] = new_engine
-        self.parent_win.settings["homepage"] = new_home
+        self.parent_win.settings["homepage"] = homepage_url  # Принудительно заменяем
         self.parent_win.settings["language"] = new_lang
         self.parent_win.settings["font_family"] = new_font_family
         self.parent_win.settings["download_mode"] = new_dl_mode
@@ -1498,6 +1589,9 @@ class LanguageSelectionDialog(QDialog):
         self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self.fade_animation.start()
         super().showEvent(event)
+
+
+
 # -------------------- MainWindow --------------------
 class MainWindow(QMainWindow):
     def __init__(self, settings=None):
@@ -1525,6 +1619,10 @@ class MainWindow(QMainWindow):
         self.custom_extension_scripts = []
         self.apply_settings()
         self.initUI()
+        profile = QWebEngineProfile.defaultProfile()
+        profile.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        profile.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.init_shortcuts()
         self.update_extensions()
         if self.settings.get("first_launch", True):
@@ -1532,6 +1630,30 @@ class MainWindow(QMainWindow):
             self.settings["first_launch"] = False
             save_settings(self.settings)
 
+
+    def load_custom_extensions(self):
+        ext_list = load_extensions()
+        # Добавляем встроенное расширение Google Dark, если его ещё нет
+        if not any(ext.get("name", "").lower() == "google dark" for ext in ext_list):
+            ext_list.append({
+                "name": "Google Dark",
+                "code": GOOGLE_DARK_EXTENSION,
+                "enabled": True,
+                "description": "Google dark theme built-in extension."
+            })
+            save_extensions(ext_list)
+        # Загружаем все включённые расширения как скрипты
+        for ext in ext_list:
+            if ext.get("enabled", True):
+                script = QWebEngineScript()
+                script.setName(ext.get("name", "UserExtension"))
+                script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                script.setRunsOnSubFrames(True)
+                script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                script.setSourceCode(ext.get("code", ""))
+                self.profile.scripts().insert(script)
+                self.custom_extension_scripts.append(script)
+    
     def save_current_history(self):
         self.progress.hide()
         webview = self.current_webview()
@@ -1598,16 +1720,25 @@ class MainWindow(QMainWindow):
         return TRANSLATIONS.get(lang, TRANSLATIONS["ru"]).get(key, key)
 
     def apply_settings(self):
+        # Применяем настройки шрифта
         font_family = self.settings["font_family"]
         font_size = self.settings["font_size"]
         self.setFont(QFont(font_family, font_size))
-        ui_theme = self.settings.get("ui_theme", "Default")
-        if ui_theme == "Dark":
-            self.setStyleSheet("QToolBar { background-color: #2e2e2e; }")
-        elif ui_theme == "Light":
-            self.setStyleSheet("QToolBar { background-color: #f0f0f0; }")
+
+        # Получаем базовую директорию (папка, где находится main.py)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Задаем путь домашней страницы в зависимости от режима
+        if self.is_private:
+            # Приватный режим – домашняя страница из папки site/private
+            homepage_path = os.path.join(base_dir, "site", "private", "index.html")
         else:
-            self.setStyleSheet("")
+            # Обычный режим – домашняя страница из папки site/global
+            homepage_path = os.path.join(base_dir, "site", "global", "index.html")
+
+        # Преобразуем путь в URL формата file:// и устанавливаем его
+        self.homepage = QUrl.fromLocalFile(homepage_path).toString()
+        print("Домашняя страница:", self.homepage)
 
     def initUI(self):
         os.makedirs(self.cache_path, exist_ok=True)
@@ -1685,7 +1816,9 @@ class MainWindow(QMainWindow):
         search_layout = QHBoxLayout(search_widget)
         search_layout.setContentsMargins(0, 0, 0, 0)
         search_layout.setSpacing(5)
-        self.urlbar = QLineEdit()
+# Создание адресной строки с запретом на автоматический фокус
+        self.urlbar = QLineEdit(self)
+        self.urlbar.setFocusPolicy(Qt.FocusPolicy.NoFocus)  
         self.urlbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.urlbar.returnPressed.connect(self.navigate_to_url)
         search_layout.addWidget(self.urlbar)
@@ -1811,11 +1944,21 @@ class MainWindow(QMainWindow):
         addTabButton.setAutoRaise(True)
         addTabButton.clicked.connect(lambda: self.add_new_tab())
         self.tabs.setCornerWidget(addTabButton, Qt.Corner.TopRightCorner)
+        # Получаем базовую директорию, где находится main.py
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Определяем путь к домашней странице в зависимости от режима
         if self.is_private:
-            self.add_new_tab(QUrl("https://duckduckgo.com"), "DuckDuckGo")
+            homepage_path = os.path.join(base_dir, "site", "private", "index.html")
         else:
-            homepage = self.settings.get("homepage", "https://www.google.com")
-            self.add_new_tab(QUrl(homepage), "Home")
+            homepage_path = os.path.join(base_dir, "site", "global", "index.html")
+
+        # Преобразуем путь в URL формата file://
+        homepage_url = QUrl.fromLocalFile(homepage_path)
+
+        # Открываем новую вкладку с домашней страницей
+        self.add_new_tab(homepage_url, "Homepage")
+
 
     def consoleMessage(self, level, message, line, sourceID):
         if "Dev Tools is now avalible in russian" in message:
@@ -1941,25 +2084,45 @@ class MainWindow(QMainWindow):
         self.download_animations.append(anim_group)
 
     def add_new_tab(self, qurl: QUrl = None, label="Новая вкладка"):
+        # Если URL не передан, подставляем локальный index.html
         if qurl is None:
-            qurl = QUrl(self.settings.get("homepage", "https://www.google.com"))
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            if self.is_private:
+                # Приватный режим
+                homepage_path = os.path.join(base_dir, "site", "private", "index.html")
+            else:
+                # Обычный режим
+                homepage_path = os.path.join(base_dir, "site", "global", "index.html")
+
+            # Преобразуем путь к файлу в формат file://
+            qurl = QUrl.fromLocalFile(homepage_path)
+
+        # Создаём новый QWebEngineView
         browser = QWebEngineView()
-        index = self.tabs.addTab(browser, "Новая вкладка")
+
+        # Добавляем вкладку (просто создаём, но не отображаем)
+        index = self.tabs.addTab(browser, label)
+
+        # Устанавливаем кастомную страницу (если нужно)
         browser.setPage(CustomWebEnginePage(self.profile, browser, self))
+
+        # Загружаем URL
         browser.setUrl(qurl)
-        # Здесь первым параметром передаем браузер, вторым URL
+
+        # Подключаем сигналы (иконка, заголовок, история)
         browser.urlChanged.connect(lambda url, b=browser: self.update_tab_title(b, url))
         browser.iconChanged.connect(lambda icon, b=browser: self.update_tab_icon(b, icon))
         browser.loadFinished.connect(lambda _: self.save_current_history())
-        i = self.tabs.addTab(browser, label)
-        self.tabs.setCurrentIndex(i)
 
+        # Делаем вкладку активной
+        self.tabs.setCurrentIndex(index)
+
+        # При изменении заголовка меняем название вкладки
         browser.page().titleChanged.connect(
             lambda title, idx=index: self.tabs.setTabText(idx, title)
         )
 
         return browser
-
     # Исправленная функция: первым параметром – браузер (QWebEngineView), вторым – URL (QUrl)
     def update_tab_title(self, browser, url):
         index = self.tabs.indexOf(browser)
@@ -2014,15 +2177,55 @@ class MainWindow(QMainWindow):
             url = text
         if self.current_webview():
             self.current_webview().load(QUrl(url))
+            
+            
 
     def update_urlbar(self, index):
         webview = self.tabs.widget(index)
         if not webview:
             return
-        qurl = webview.url()
-        self.urlbar.setText(qurl.toString())
-        self.urlbar.setCursorPosition(0)
-        self.update_bookmark_icon()
+
+        # Получаем URL стандартным способом
+        qurl = webview.page().url()  # Используем page().url(), а не webview.url()
+        url_str = qurl.toString()
+
+    # Обновляем адресную строку
+        if url_str:
+            if url_str.startswith("file://"):
+                self.urlbar.setText("Файл")
+            else:
+                self.urlbar.setText(url_str)
+        else:
+            self.urlbar.setText("Загрузка...")  # Временно ставим "Загрузка..."
+
+    # Функция для обновления после загрузки страницы
+    # Обработчик загрузки страницы
+    def on_load_finished():
+        update_url()  # Обновляем URL после загрузки страницы
+
+    # Функция обновления URL
+    def update_url():
+        qurl = webview.page().url().toString()
+        if qurl:
+            if qurl.startswith("file://"):
+                self.urlbar.setText("Файл")
+            else:
+                self.urlbar.setText(qurl)
+        else:
+            self.urlbar.setText("Ошибка загрузки")
+            
+        # Обработчик изменения URL (например, если сайт делает редирект)
+        def on_url_changed():
+            update_url()  # Обновляем URL при изменении адреса
+
+    # Подключаем сигналы
+        webview.loadFinished.connect(on_load_finished)
+        webview.urlChanged.connect(on_url_changed)
+
+        # Первичное обновление (без него строка будет пустая, пока не загрузится страница)
+        update_url()
+
+
 
     def close_current_tab(self, index):
         if self.tabs.count() < 2:
@@ -2154,7 +2357,6 @@ class MainWindow(QMainWindow):
             (function(){
                 document.body.style.backgroundColor = "#1e1e1e";
                 document.body.style.color = "#e0e0e0";
-                document.body.style.fontFamily = "Helvetica, Arial, sans-serif";
                 var header = document.querySelector("header");
                 if(header) { header.style.display = "none"; }
                 var chatContainer = document.querySelector(".overflow-y-auto");
@@ -2301,9 +2503,42 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.chatgpt_dock)
         self.chatgpt_view.loadFinished.connect(self.inject_chatgpt_js)
 
+def set_dark_palette(app):
+    dark_palette = QPalette()
+    dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.Text, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor(255, 255, 255))
+    dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
+    dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(0, 0, 0))
+    app.setPalette(dark_palette)
+
 # -------------------- Main --------------------
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
+    
+    # Загрузка настроек
+    settings = load_settings()
+    
+    # Глобально задаём шрифт
+    app.setFont(QFont(settings["font_family"], settings["font_size"]))
+    
+    # Применяем тёмную палитру
+    set_dark_palette(app)
+    
+    # Если есть файл QSS для тёмной темы, загружаем его
+    qss_path = os.path.join(BASE_DIR, "dark_theme.qss")
+    if os.path.exists(qss_path):
+        with open(qss_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+    
+    window = MainWindow(settings)
     window.show()
     sys.exit(app.exec())
